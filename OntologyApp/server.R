@@ -289,13 +289,14 @@ function(input, output, session) {
                    sep = ",",
                    quote = "")
     
+   
     ## error handling
     errors <- NULL
     
     if( dim(df)[2]  < 3  ){
       errors <- c(errors,"ERROR: Unkown error")
     }
-    if( (sum(df[,-1]=="")+(sum(df[,-1]=="NA")))   >0  ){
+    if( sum(is.na(df[,-1]))   >0  ){
       errors <- c(errors,"ERROR: There are missing values")
     }
     if(all(table(as.character(df[1,-1]))<2) ){
