@@ -16,7 +16,7 @@ pvalueExample1 <-  paste( paste(PM$lipids, "\t", PM$pvalues, sep = ""),    "\n",
 pvalueExample2 <-  paste( paste(MT$lipids, "\t", MT$pvalues, sep = ""),    "\n",    collapse = '',    sep = ""  )
 pvalueExample3 <-  paste( paste(ER$lipids, "\t", ER$pvalues, sep = ""),    "\n",    collapse = '',    sep = ""  )
 
-source(file  = "data/20180604 LION_tree_structure.R")
+source(file  = "data/20190109 LION_tree_structure.R")
 
 #### libraries
 
@@ -29,12 +29,15 @@ require(ggplot2)
 require(ggthemes)
 library(shinyTree)
 library(shinyWidgets)
+library(shinyBS)
+library(httr)
 
 ## loading lipid ontology data
 require(RSQLite)
 require(topOnto)
 require('topOnto.LION.db')
 topOnto::initONT('LION')
+
 
 
 associationFile  <-  "data/20180614 LION_association.txt"
@@ -46,9 +49,11 @@ LIONTermList$list <- as.list(LIONTermList[[2]])
 names(LIONTermList$list) <- LIONTermList[[1]]
 LIONTermList <- LIONTermList$list
 
-##
+## define functions
 
 convertLipidNames <- function(name){
+  
+  options(stringsAsFactors = FALSE)
   
   sapply(name, function(input) {
     processed_input <- input
@@ -70,12 +75,15 @@ convertLipidNames <- function(name){
       processed_input <- gsub("LBPA","BMP",processed_input)
       processed_input <- gsub("lyso|Lyso","L",processed_input)
       
+      processed_input <- gsub("^FA","FFA",processed_input)
+      processed_input <- gsub("ChE|CholE","CE",processed_input)
+      
       processed_input <- gsub("\\Q(3'-sulfo)Galβ-Cer\\E|\\Q(3'-sulfo)GalCer\\E|Sulfogalactosyl ceramide[ ]*|[Ss]+(Gal|Hex)Cer|Sulfatide",
                               "SHexCer",processed_input)
       
       
       processed_input <- gsub("LacCer","Hex2Cer",processed_input)
-      processed_input <- gsub("Gl[u]*c[β-]*Cer|Gal[β-]*Cer","HexCer",processed_input)
+      processed_input <- gsub("Gl[u]*c[β-]*Cer|Gal[β-]*Cer|GluCer","HexCer",processed_input)
     }    ### end aliases
     
     ### special cases:  'DG(0:0/18:1/16:0)' >> DG(18:1/16:0)
@@ -88,6 +96,44 @@ convertLipidNames <- function(name){
     ### end special cases
     if(grepl("\\d+:\\d+;\\d+",processed_input) & !grepl("\\d+:\\d+;\\d+:\\d+",processed_input)){    ### 32:1;1 format >> 32:1
       processed_input <- gsub(";\\d+","",processed_input)
+    }
+    
+    ###  >> remove (FA 16:0), not intensively tested
+    processed_input <- gsub("\\(FA( )*", "(",processed_input)   
+    
+    ### 'CL(32:0)(34:1)' or 'TAG 32:0(FA 16:0)' >> sum FAs between (), not intensively tested
+    FAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+", processed_input)))
+    if(length(FAs)>0){
+      FAs <- FAs[sapply(regmatches(FAs, gregexpr("\\d+", FAs)), function(i){  as.numeric(i)[1] > as.numeric(i)[2]  })]  ## C should be higher than DB  
+    }
+    if((grepl("CL", processed_input ) & (length(FAs) == 2 | length(FAs) == 3)) |
+       (grepl("TAG|TG", processed_input ) & (length(FAs) == 2)))     {
+      parts <- unlist(regmatches(processed_input, gregexpr("[\\(]*\\d+:\\d+[\\)]*", processed_input)) )
+      prefix <- unlist(strsplit(processed_input, "[\\(]*\\d+:\\d+[\\)]*"))[1]
+      suffix <- unlist(strsplit(processed_input, "[\\(]*\\d+:\\d+[\\)]*"))[2]
+      processed_input <- paste(prefix, "(",
+                               sum(sapply(regmatches(
+                                 parts, gregexpr("\\d+", parts)
+                               ), function(i) {
+                                 as.numeric(i)[1]
+                               })), ## number of Cs
+                               ":",
+                               sum(sapply(regmatches(
+                                 parts, gregexpr("\\d+", parts)
+                               ), function(i) {
+                                 as.numeric(i)[2]
+                               })), ## number of DBs
+                               ")", suffix, sep = "")
+    }
+    ### end 'CL(32:0)(34:1)'
+    
+    
+    if(length(FAs)==2 & grepl("^SM",    processed_input)){                ### voor 'SM 18/16:0)'
+      if(!grepl("[dt]\\d+",processed_input)){                             ### double check: no 'd'18...?
+        processed_input <- gsub("SM 18","SM d18",processed_input)         ### add 'd'
+        processed_input <- gsub("SM\\(18","SM(d18",processed_input)
+      }
+      
     }
     
     processed_input <- gsub("_\\d*\\.*\\d*/\\d*\\.*\\d*", "",processed_input)   ## remove amu/RT info
@@ -131,15 +177,31 @@ convertLipidNames <- function(name){
     processed_input <-
       gsub("\\((\\d+[EZ]{1},*)+\\)", "", processed_input)   ## removing (5Z,8Z,11Z,14Z)-like info
     
+    if (grepl("\\d+:\\d+[pe]{1}", processed_input)){             ### ether lipids: in case of 18:1p in stead of P-18:1
+      
+      ether_FAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+[pe]{1}", processed_input)))  ## extract 18:1
+      
+      for(i in 1:length(ether_FAs)){
+        processed_input <-
+          gsub(ether_FAs[i],              ## replace 18:1p for P-18:1
+               paste(
+                 ifelse(grepl("p", ether_FAs[i]), "P-", "O-"),
+                 regmatches(ether_FAs[i], regexpr("\\d+:\\d+", ether_FAs[i])),
+                 sep = ""
+               ),
+               processed_input)
+      }
+    }
+    
     if (!grepl("\\(", processed_input)) {
       ## if they don't contain /
       ## process PC 18:1/20:4 format to PC(..)
       
-      middlePart <-         ### ..18:1/16:0
+      middlePart <-         ### ..O-18:1/16:0
         regmatches(processed_input,
-                   regexpr("[dtAOP]*(\\d+:\\d+/*)+", processed_input))
+                   regexpr("[dtAOP-]*(\\d+:\\d+/*)+", processed_input))
       otherParts <-         ## SM
-        unlist(strsplit(processed_input, "[dtAOP]*(\\d+:\\d+/*)+"))
+        unlist(strsplit(processed_input, "[dtAOP-]*(\\d+:\\d+/*)+"))
       otherParts <- gsub(" ", "", otherParts)
       text <- ""
       
@@ -180,7 +242,8 @@ convertLipidNames <- function(name){
       middlePart <-         ### ..18:1 + /0:0
         paste(regmatches(
           processed_input,
-          regexpr("(\\d+:\\d+/*)+", processed_input)
+          #regexpr("(\\d+:\\d+/*)+", processed_input)
+          regexpr("([OP-]*\\d+:\\d+[ep/]*)+", processed_input)
         ), sep = "")
       
       if(identical(middlePart,character(0))){middlePart <- ""}
@@ -189,7 +252,7 @@ convertLipidNames <- function(name){
       
       
       otherParts <-         ## LPC
-        unlist(strsplit(processed_input, "(\\d+:\\d+/*)+"))
+        unlist(strsplit(processed_input, "([OP-]*\\d+:\\d+[ep/]*)+"))
       otherParts <- gsub("L", "", otherParts)
       if(identical(otherParts,character(0))){otherParts <- ""}
       
@@ -210,6 +273,7 @@ convertLipidNames <- function(name){
       
     }
     
+
     if(grepl('^P\\D\\(A-*',processed_input) ){      ########## ether lipids 20180605
       processed_input <- gsub('\\(A-*',"(O-",processed_input)    ##gsub('A-*',"(O-",processed_input)
     }
@@ -223,14 +287,11 @@ convertLipidNames <- function(name){
       processed_input <- gsub("[[:upper:]]{1}[[:lower:]]{2}", tolower(UpperLower),processed_input )
     }
     
-    ## {n} Matches exactly n times
-    ## {n,} Matches at least n times
-    ## {,n}
     
     ## reorder FAs
     if (
-      (length(unlist(regmatches(processed_input, gregexpr("\\d+:\\d+",        processed_input)))) > 1) &         ## when more than 1 FA)
-      (length(unlist(regmatches(processed_input, gregexpr("[dtm](\\d+:\\d+)", processed_input)))) < 1) &        ## unless it's SM(d18:1...)
+      (length(unlist(regmatches(processed_input, gregexpr("\\d+:\\d+",        processed_input)))) > 1) &                         ## when more than 1 FA)
+      (length(unlist(regmatches(processed_input, gregexpr("[dtm](\\d+:\\d+)|[PO]-(\\d+:\\d+)", processed_input)))) < 1) &        ## unless it's SM(d18:1...) or P-18:1
       (!grepl("0:0", processed_input))                           ## unless it's containing a 0:0 FA (=lyso, should be on second position))
     ){                                                               
       FAs <- t(as.data.frame(strsplit(unlist(
@@ -266,12 +327,75 @@ convertLipidNames <- function(name){
   
   
   
-}      # module for lipid name conversion
+}      ## 20190125
 
+sendEmail <- function(subject = "LION/web usage", mail_message = "empty", from = "system"){
+  url <- "emailserver"
+  api_key <- "xxxxxxx"
+  the_body <-
+    list(
+      from="webmaster",
+      to="email@email.com",
+      subject=subject,
+      text=paste(mail_message,"\n\n=====================\nfrom: ",from,"\n=====================\nLION/web: www.lipidontology.com", sep= "")
+    )
+  req <- httr::POST(url, httr::authenticate("api", api_key),  encode = "form",  body = the_body)
+  httr::stop_for_status(req)
+  TRUE
+}   ## mail function
+
+associatedTerms <- function(lipid, ontologyObject, all = FALSE, reformat = FALSE) {    ## function: which LION-terms are associated with a lipid?
+  if (!reformat) {
+    associations <- sapply(lipid, function(lipid_i) {
+      terms <-
+        ontologyObject@termName[names(ontologyObject@termName) %in% names(genesInTerm(ontologyObject))[sapply(genesInTerm(ontologyObject), function(term) {
+          any(term == lipid_i)
+        })]]   ## find terms
+      
+      if (!all) {
+        terms <- terms[grepl("LION", names(terms))]
+      }     ## is all == TRUE, than remove CAT and all  terms
+      return(terms)
+    })
+    return(associations)
+    
+  } else if (reformat) {
+    
+    terms <- names(genesInTerm(ontologyObject))
+    if (!all) {
+      terms <- terms[grepl("LION", terms)]
+    }     ## is all == TRUE, than remove CAT and all  terms
+    
+    lipid_term_table <- t(sapply(lipid, function(lipid_i) {
+      terms_per_lipid <-
+        names(ontologyObject@termName[names(ontologyObject@termName) %in% names(genesInTerm(ontologyObject))[sapply(genesInTerm(ontologyObject), function(term) {
+          any(term == lipid_i)
+        })]])
+      return(ifelse(terms %in% terms_per_lipid, "x", ""))
+    }))
+    
+    names <- ontologyObject@termName[match(terms, names(ontologyObject@termName))]
+    
+    lipid_term_table <- rbind(terms, names, lipid_term_table)
+    lipid_term_table <- cbind(rownames(lipid_term_table), lipid_term_table)
+    rownames(lipid_term_table) <- NULL
+    colnames(lipid_term_table) <- NULL
+    lipid_term_table <- as.data.frame(lipid_term_table)
+    lipid_term_table[[1]][1:2] <- c("LION-term", "LION-name")
+    return(lipid_term_table)
+  }
+  
+} ## which LION-terms are associated with a lipid?
+
+
+
+## read associations
 lipidID2TERM <- readMappings(file = associationFile)   ## topOnto function, but removes spaces
 
-
+# Define server
 function(input, output, session) {
+  
+  
   ### hide tabs at start-up
   hideTab(inputId = "tabs", target = "LION input")
   hideTab(inputId = "tabs", target = "LION enrichment table")
@@ -284,42 +408,88 @@ function(input, output, session) {
   input_data <- reactive({
     
     req(input$file1)
-    df <- read.csv(input$file1$datapath,
+    
+    
+    df <- try(read.csv(input$file1$datapath,
                    header = FALSE,
                    sep = ",",
-                   quote = "")
+                   quote = ""))
     
-   
+    
     ## error handling
-    errors <- NULL
     
-    if( dim(df)[2]  < 3  ){
-      errors <- c(errors,"ERROR: Unkown error")
-    }
-    if( sum(is.na(df[,-1]))   >0  ){
-      errors <- c(errors,"ERROR: There are missing values")
-    }
-    if(all(table(as.character(df[1,-1]))<2) ){
-      errors <- c(errors,"ERROR: Some or all conditions are n < 2")
-    }
-    if(duplicated(df[2,-1]) ){
-      errors <- c(errors,"ERROR: One or more samples names are not unique")
+    errors <- NULL
+    if (!(is.data.frame(df))) {
+      df <- data.frame(errors = df[1], column = 0)
+      errors <- c(errors, "ERROR: File type not supported")
+    } else {
+      if (dim(df)[2]  == 1) {
+        errors <- c(errors, "ERROR: No commas found to seperate columns")
+      }
+      if (dim(df)[2]  > 1 & dim(df)[2]  < 3) {
+        errors <- c(errors, "ERROR: Unkown error")
+      }
+      if (sum(is.na(df[, -1]))   > 0) {
+        errors <- c(errors, "ERROR: There are missing values")
+      }
+      if (sum( df[-c(1,2),-1] == "" ) > 0) {
+        errors <- c(errors, "ERROR: Dataset contains empty cells")
+      }
+      if (all(table(as.character(df[1, -1])) < 2)) {
+        errors <- c(errors, "ERROR: Some or all conditions are n < 2")
+      }
+      if (any(duplicated(df[2, -1]))) {
+        errors <-
+          c(errors, "ERROR: One or more samples names are not unique")
+      }
     }
     errors <- paste(errors, collapse = "<br>")
     
     ## end error handling
     
     
-    
-    list(df = df,
+    if(!(is.null(errors))){
+      input_data <- list(df = df,
          matrix = sapply(df[-c(1,2),-1], as.numeric),
          conditions = unique(as.character(df[1,-1])),
          samples = as.character(df[2,-1]),
          meta = df[1:2,-1],
          IDs = df[-c(1,2),1],
          errors = errors)
+    } else {
+      input_data <-list(df = NULL,
+           matrix = NULL,
+           conditions = NULL,
+           samples = NULL,
+           meta = NULL,
+           IDs = NULL,
+           errors = errors)
+    }
     
+    return(input_data)
     
+  })
+  
+  output$selectLocalStatisticUI <- renderUI({
+    input_data <- input_data()
+    conditions <- input_data$conditions
+    
+    if (input_data$errors == "") {
+      
+      wellPanel(
+        popify(placement = "bottom", title = "Info",
+        radioButtons("local_statistics", label = h4("Select local statistics to rank input identifiers"),
+                     choices = list("one-tailed T-test (2 conditions)" = 1, "2-LOG[fold change] (2 conditions)" = 2, "one-way ANOVA F-test (>2 conditions)" = 3), 
+                     selected = 1), content = 'Select a local statistic to rank the metabolites based on the provided dataset. LION-terms associated with lipids higher ranked than expected by chance will be reported as enriched.'),
+      
+        br(),
+        uiOutput("conditionsUI")
+      )
+    } else {     ### if there are errors...
+      HTML(paste('<font color="red">',
+                 input_data$errors,
+                 "</font>",sep=""))
+    }
     
   })
   
@@ -327,15 +497,19 @@ function(input, output, session) {
     input_data <- input_data()
     conditions <- input_data$conditions
     
-    if (input_data$errors == "") {
+    if (input$local_statistics == 1){        ## t-test pvalues 
+      
+      
       wellPanel(
-        "Calculate p-values by Student's t-test:",
+        
+        h5(tags$i("a T-test p-value will be calculated for every input identifier")),
+        
         fluidRow(
           column(
             width = 6,
             selectInput(
               "conditionA",
-              h5("condition of interest"),
+              h4("condition of interest"),
               conditions,
               selected = conditions[1]
             )
@@ -344,7 +518,7 @@ function(input, output, session) {
             width = 6,
             selectInput(
               "conditionB",
-              h5("control condition"),
+              h4("control condition"),
               conditions,
               selected = conditions[2]
             )
@@ -352,7 +526,7 @@ function(input, output, session) {
         ),
         actionButton(
           inputId = "calculatePreprocessing",
-          label = "  Calculate p-values",
+          label = "  Calculate local statistics",
           width = NULL,
           icon = icon("line-chart", lib = "font-awesome")
         ),
@@ -362,45 +536,189 @@ function(input, output, session) {
         br(),
         uiOutput("conditionsUI_pB")
       )
-    } else {     ### if there are errors...
-      HTML(paste('<font color="red">',
-                 input_data$errors,
-                 "</font>",sep=""))
+    } else if(input$local_statistics == 2) {   ### 2log fold change
+      
+      wellPanel(
+        
+        h5(tags$i("a 2-LOG[fold change] value will be calculated for every input identifier")),
+        
+        fluidRow(
+          column(
+            width = 6,
+            selectInput(
+              "conditionA",
+              h4("condition of interest"),
+              conditions,
+              selected = conditions[1]
+            )
+          ),
+          column(
+            width = 6,
+            selectInput(
+              "conditionB",
+              h4("control condition"),
+              conditions,
+              selected = conditions[2]
+            )
+          )
+        ),
+        actionButton(
+          inputId = "calculatePreprocessing",
+          label = "  Calculate local statistics",
+          width = NULL,
+          icon = icon("line-chart", lib = "font-awesome")
+        ),
+        br(),
+        br(),
+        plotOutput("p_value_plot"),
+        br(),
+        uiOutput("conditionsUI_pB")
+      )
+      
+    } else {     ### F-test
+      
+      wellPanel(
+        
+       h5(tags$i("an F-test p-value will be calculated for every input identifier")),
+        
+       selectizeInput(inputId = "selectedConditions",  h4("conditions of interest"), 
+                       choices = input_data()$conditions, selected = input_data()$conditions,
+                       multiple = TRUE,options = list(plugins= list('remove_button'))
+        ),
+       
+        actionButton(
+          inputId = "calculatePreprocessing",
+          label = "  Calculate local statistics",
+          width = NULL,
+          icon = icon("line-chart", lib = "font-awesome")
+        ),
+        br(),
+        br(),
+        htmlOutput("FtestError"),
+        br(),
+        plotOutput("p_value_plot"),
+        br(),
+        uiOutput("conditionsUI_pB")
+      )
+     
     }
   })
   
+  output$FtestError <- renderText({ 
+    message <- ifelse(length(input$selectedConditions)<2, "ERROR: Number of conditions should be 2 or higher","")
+    HTML(paste('<font color="red">',
+               message,
+               "</font>",sep=""))
+  })
+  
+  
   output$conditionsUI_pB <- renderUI({
-    pre_processed_data()[[1]]   ### show when 'pre_processed_data()' is constructed
-    actionButton(inputId = "submitPreprocessing",
-                 label = "  Add values to LION/web", 
-                 width = NULL,
-                 icon = icon("share-square-o", lib = "font-awesome"))
+    data <- pre_processed_data()[[1]]   ### show when 'pre_processed_data()' is constructed
+    if(!(any(is.na(data$pValues)))){
+      actionButton(inputId = "submitPreprocessing",
+                   label = "  Use values as local statistics", 
+                   width = NULL,
+                   icon = icon("share-square-o", lib = "font-awesome"))
+    }
+    
     
   })
 
   pre_processed_data <-     eventReactive(input$calculatePreprocessing, {
     
+    
+    if(any(input$local_statistics %in% c(1,2))){
     setA <- input_data()$matrix[,which(input_data()$meta[1,] == input$conditionA)]
     setB <- input_data()$matrix[,which(input_data()$meta[1,] == input$conditionB)]
+    }
     
-    pValues <- apply(cbind(setA,setB), 1, function(row){
-      t.test(x=row[1:dim(setA)[2]],
-             y=row[(dim(setA)[2]+1):(dim(setA)[2]+dim(setB)[2])],
-             alternative = "greater")$p.value 
+    if(input$local_statistics == 1){   ### when t-test p-values are selected
       
-    })
+      pValues <- apply(cbind(setA,setB), 1, function(row){
+        t.test(x=row[1:dim(setA)[2]],
+               y=row[(dim(setA)[2]+1):(dim(setA)[2]+dim(setB)[2])],
+               alternative = "greater")$p.value 
+        
+      })
+      outputList <- list(data.frame(IDs = input_data()$IDs,
+                                    pValues = pValues))
+      
+    }
+      
+    if(input$local_statistics == 2){   ### when 2-log FC values are selected
+      
+      FC_values <- apply(cbind(setA,setB), 1, function(row){
+        x <- mean(row[1:dim(setA)[2]], na.rm = TRUE)
+        y <- mean(row[(dim(setA)[2]+1):(dim(setA)[2]+dim(setB)[2])], na.rm = TRUE)
+        log(x = x/y, base = 2)
+      
+      })
+      outputList <- list(data.frame(IDs = input_data()$IDs,
+                                    pValues = FC_values))
+      
+    }
     
-    outputList <- list(data.frame(IDs = input_data()$IDs,
-                                  pValues = pValues))
+    if(input$local_statistics == 3){   ### when 2-log FC values are selected
+      
+      input_data <- input_data()
+      
+      if (length(input$selectedConditions) > 1) {      ## minimum of 2 conditions needed
+        pValues <- sapply(1:length(input_data$IDs), function(lipid_nr) {
+          df <- melt(
+            data = sapply(input$selectedConditions, function(condition) {
+              input_data$matrix[lipid_nr,  unlist(input_data$meta[1,]) == condition]
+            }),
+            value.name = "signal",
+            variable.name = "condition"
+          )
+          names(df) <- c("l", "condition", "signal")
+          
+          model.df <- lm(signal ~ condition, data = df)
+          anova(model.df)['condition', 'Pr(>F)']
+        })
+      } else {pValues = NA}
+    
+          
+       
+      outputList <- list(data.frame(IDs = input_data()$IDs,
+                                    pValues = pValues))
+      
+    }
+    
     names(outputList) <- paste("set",isolate(input$submit),sep="")
     outputList
     
   })
   
   output$p_value_plot <- renderPlot({
+    
     df <- pre_processed_data()[[1]]
     df <- df[,2][order(df[,2])]
-    qplot(y=df, main = "Distribution p-values", xlab = "metabolites", ylab = "p-value")
+   
+    ylab <- subset(data.frame(selection = 1:3, ylab = c('t-test p-value','2-LOG[fold change]','F-test p-value (log scale)')), 
+           selection == isolate(input$local_statistics))$ylab
+    
+    if(ylab == 'F-test p-value (log scale)'){
+      if (length(input$selectedConditions) > 1) { 
+      qplot(y=df, main = "Distribution local statistics", 
+            xlab = "metabolites", 
+            ylab = ylab,
+            log = "y"
+            
+      )} else {
+        ggplot(data.frame(x = 1:length(df), y=NA), aes(x = x, y = y))+
+          labs(x = "metabolites", y = ylab, title = "Distribution local statistics")+
+          geom_blank()
+      }
+      
+    } else {
+      qplot(y=df, main = "Distribution local statistics", 
+            xlab = "metabolites", 
+            ylab = ylab
+      )
+    }
+    
+   
     
   })
   
@@ -414,8 +732,16 @@ function(input, output, session) {
     pre_processed_data <- paste( paste(pre_processed_data$IDs, "\t", pre_processed_data$pValues, sep = ""),    "\n",    collapse = '',    sep = ""  )
     
     updateTextAreaInput(session, "listwPvalues",  value = pre_processed_data)
-    updateTabsetPanel(session, "method",
-                      selected = "By ranking")
+    ### update dependent on statistics choice
+    if(isolate(input$local_statistics) == 2){   ### 2 == log fold change 
+      updateRadioButtons(session, "ranking", selected = "descending" )
+    } else {     ## in case of p-values
+      updateRadioButtons(session, "ranking", selected = "ascending" )
+    }
+    
+    ###
+    updateTabsetPanel(session, "sub_method",
+                      selected = "(ii) analysis")
   })
   
   output$examplePre1 <- downloadHandler(
@@ -526,7 +852,7 @@ function(input, output, session) {
     
     ####  is input appropriate??
     
-    if (isolate(input$method) == "By ranking") {
+    if (isolate(input$sub_method) == "(ii) analysis") {
       if(!(grepl("\t", input_listwPvalues) & 
            grepl("\n", input_listwPvalues) &
            grepl("\\D",input_listwPvalues) &
@@ -540,7 +866,7 @@ function(input, output, session) {
       }
     }
     
-    if (isolate(input$method) == "By target list") {        
+    if (isolate(input$method) == "Target-list mode") {        
       if( isolate(input$sublist)==""  | isolate(input$background) == ""){   ### definition of wrong input
         hideTab(inputId = "tabs", target = "LION enrichment table")
         hideTab(inputId = "tabs", target = "LION enrichment graph")
@@ -559,7 +885,7 @@ function(input, output, session) {
     
     withProgress(message = 'progress:', value = 0, {
       incProgress(.1, detail = paste("mapping input data"))
-      if (isolate(input$method) == "By target list") {
+      if (isolate(input$method) == "Target-list mode") {
       if ((is.null(isolate(input$sublist)) ||
            isolate(input$sublist) == "") == FALSE) {
         lipidExistance <-
@@ -573,7 +899,7 @@ function(input, output, session) {
       
     }
     
-      if (isolate(input$method) == "By ranking") {
+      if (isolate(input$sub_method) == "(ii) analysis") {
       if ((is.null(input_listwPvalues) ||
            input_listwPvalues == "") == FALSE) {
 
@@ -620,6 +946,7 @@ function(input, output, session) {
       
       lipidExistance$'simplified input' <- NULL        ## remove this column, not interesting for user
       
+      ## lipidExistance <- lipidExistance[order(lipidExistance$'LION ID'),]   ## reorder based on matching
       lipidExistance
     }
     
@@ -634,7 +961,7 @@ function(input, output, session) {
         
         incProgress(.5, detail = paste("submitting data"))
         
-        if (isolate(input$method) == "By target list") {
+        if (isolate(input$method) == "Target-list mode") {
           if ((is.null(isolate(input$sublist)) ||
                isolate(input$sublist) == "") == FALSE) {
             lipidIDs <-
@@ -766,6 +1093,7 @@ function(input, output, session) {
                 n[['remove']]
               })))
               
+              print(to_display[to_display$TERM.ID %in% test_similarity,]  )
               to_display <- to_display[!(to_display$TERM.ID %in% test_similarity),]  
               
             }
@@ -796,7 +1124,7 @@ function(input, output, session) {
           }
         } ## end if "By target list"
         
-        if (isolate(input$method) == "By ranking") {
+        if (isolate(input$sub_method) == "(ii) analysis") {
           if ((is.null(input_listwPvalues) ||
                input_listwPvalues == "") == FALSE) {
             pValueList <- list()
@@ -870,6 +1198,8 @@ function(input, output, session) {
             
             ## limiting redundant/similar parent terms
             
+            ## limiting redundant/similar parent terms
+            
             if(isolate(input$RemoveRedundantTerms)){    ### switch for LION-selection
               ONT_DAG <- ONTdata@graph
               ONT_DAG_lev <- buildLevels(ONT_DAG)
@@ -936,6 +1266,7 @@ function(input, output, session) {
                   n[['remove']]
                 })))
               
+              print(to_display[to_display$TERM.ID %in% test_similarity,]  )
               to_display <- to_display[!(to_display$TERM.ID %in% test_similarity),]  
               
             }
@@ -974,6 +1305,7 @@ function(input, output, session) {
         ### make detailed table with lipids per term
         to_display_detailed <- to_display
         
+        
         identifiers <- lapply(to_display_detailed$'Term ID', function(ID){
           genesInTerm(ONTdata)[[ID]]
         })
@@ -997,8 +1329,25 @@ function(input, output, session) {
         } else {to_display_detailed <- to_display}
         
         
-  
-
+        ### lipid associations report
+        
+        lipidReport <- associatedTerms(lipid = ONTdata@allGenes, ontologyObject = ONTdata, reformat = TRUE)
+        colnames(lipidReport) <- lipidReport[1,]
+        lipidReport <- lipidReport[-1,]
+        
+        ### term associations report
+        
+        lipidsInTerms <- genesInTerm(ONTdata)
+        
+        lipidsInTerms <- data.frame(ID = names(lipidsInTerms),
+                                 Discription = LUT$Discription[match(names(lipidsInTerms), LUT$ID)],
+                                 nr_lipids = sapply(lipidsInTerms, function(term){length(term)}),
+                                 lipids = sapply(lipidsInTerms, function(term){paste(term, collapse = '; ')}))
+        
+        lipidsInTerms <- subset(lipidsInTerms, Discription != lipids)
+        colnames(lipidsInTerms) <- c("LION-term","LION-name", "nr_lipids", "lipid identifiers")
+        
+        
         ### ggplot of data
         
         to_ggplot_display <- to_display
@@ -1036,12 +1385,12 @@ function(input, output, session) {
         ### network
         
         
-        if (isolate(input$method) == "By target list") {
+        if (isolate(input$method) == "Target-list mode") {
           resultTable <-
             GenTable(ONTdata,  'p-value' = resultFis, topNodes = 2000)
         }
         
-        if (isolate(input$method) == "By ranking") {
+        if (isolate(input$sub_method) == "(ii) analysis") {
           resultTable <-
             GenTable(ONTdata,  'p-value' = resultFis, topNodes = 2000)
           
@@ -1150,12 +1499,19 @@ function(input, output, session) {
           
         }
         
+        if(isolate(input$EmailMissingLipids)){   ## email missing lipids when option is set
+          #sendEmail(subject = "missing annotations",mail_message = paste(subset(lipidExistance,`LION ID`=="not found")$input, collapse = "\n"))
+          sendEmail(subject = "missing annotations", mail_message = paste(apply(lipidExistance, 1, function(row){paste(row, collapse = "\t")}), collapse = "\n"))
+        }
+        
         
         list(
           ONTdata = ONTdata,
           lipidExistance = lipidExistance,
           to_display = to_display,
           to_display_detailed = to_display_detailed,
+          lipidReport = lipidReport,
+          lipidsInTerms = lipidsInTerms,
           to_ggplot_display = to_ggplot_display,
           to_display_network = to_display_network
           
@@ -1169,6 +1525,8 @@ function(input, output, session) {
           lipidExistance = NULL,
           to_display = NULL,
           to_display_detailed = NULL,
+          lipidReport = NULL,
+          lipidsInTerms = NULL,
           to_ggplot_display = NULL,
           to_display_network = NULL
           
@@ -1212,9 +1570,12 @@ function(input, output, session) {
     })
   
    
-      
       output$value <- renderTable({
-        dataBlock()$lipidExistance
+        table <- dataBlock()$lipidExistance
+        #if(isolate(input$EmailMissingLipids)){   ## email missing lipids when option is set
+        #  sendEmail(subject = "missing annotations",mail_message = paste(subset(table,`LION ID`=="not found")$input, collapse = "\n"))
+        #}
+        table
       })
       
       output$downloadInput <- downloadHandler(
@@ -1247,12 +1608,22 @@ function(input, output, session) {
       
       output$downloadDetailTable <- downloadHandler(
         filename = function() {
-          paste("LION-enrichment-detailed-job",isolate(input$submitB)+isolate(input$submitA), ".csv", sep="")
+          paste("LION-enrichment-report-job",isolate(input$submitB)+isolate(input$submitA), ".zip", sep="")
           
         },
         content = function(file) {
           write.csv(dataBlock()$to_display_detailed, 
-                    file, row.names = FALSE,quote = TRUE)
+                    file = "LION-enrichment-detailed-job.csv", row.names = FALSE,quote = TRUE)
+          write.csv(dataBlock()$lipidReport, 
+                    file = "LION-lipid-associations.csv", row.names = FALSE,quote = FALSE)
+          write.csv(dataBlock()$lipidsInTerms, 
+                    file = "LION-term-associations.csv", row.names = FALSE,quote = TRUE)
+          
+          
+        
+          zip(zipfile=file, files=c( "LION-enrichment-detailed-job.csv", "LION-lipid-associations.csv","LION-term-associations.csv"))
+          
+          
         }
       )
       
@@ -1273,8 +1644,10 @@ function(input, output, session) {
       )
         
       output$ontology.graph <- renderPlot({
-        dataBlock()$to_ggplot_display
+         dataBlock()$to_ggplot_display
+               
       })
+      
       
       ## ontology enrichment tree
       output$ontology.plot <- renderVisNetwork({
@@ -1286,58 +1659,26 @@ function(input, output, session) {
                            choices =  LIONTermList, 
                            selected = NULL )
       
-      
-      ### help boxes
-      observeEvent(input$CSVhelp, {
+      ## email
+      observe({
+        if(is.null(input$send) || input$send==0) return(NULL)
+        from <- isolate(input$from)
+        to <- "m.r.molenaar@uu.nl"
+        subject <- isolate(input$subject)
+        msg <- isolate(input$message)
+        
+        sendEmail(subject = subject, from = from, mail_message = msg)
         showModal(modalDialog(
           footer = modalButton("Ok"),
           size = "m",
           easyClose = TRUE,
-          title = "Formatting CSV-file",
-          p('Please format your dataset as comma seperated value files (.csv), with the first row reserved for metabolites
-          and the other columns for numeric data (containing decimal points). Use double column headers; with row 1 containing condition 
-          identifiers and row 2 containing sample identifiers. Submit at least duplicates per condition. Furthermore, LION/web assumes that data 
-          are properly normalized.'),
-          p('After uploading, select the conditions of interest and calculate (one-tailed t-test) p-values by clicking "Calculate p-values". 
-            The result can be used for LION-enrichment analysis by clicking "Add values to LION/web"'),
-          p('Alternatively, the uploading and pre-processing step can be skipped when datasets are already pre-processed by the user. These datasets
-            can be directly entered in either the "By ranking"- or the "by target-list"-mode.'),
-          p('Download the example data-file on the bottom of the page for an example LION/web analysis.')
+          title = paste("Confirmation:",subject), 
+          p("Thank you for contacting us. Your message was sent successfully.")
+          
         ))
       })
       
-      observeEvent(input$KShelp, {
-        showModal(modalDialog(
-          footer = modalButton("Ok"),
-          size = "m",
-          easyClose = TRUE,
-          title = "LION-enrichment by ranking",
-          p('Provide a list of lipids with values that associate them with a condition of interest (COI), separated by commas or tabs. These values
-          can be fold-change values (COI over control), p-values from one-tailed t-tests or any other user-generated type of values that facilitates 
-          ranking. Select the correct ranking directions with the option "Kolmogorov-Smirnov ranking".'),
-          p('After clicking "submit", LION/web maps the input lipids to the LION-database. Only matched identifiers will be used in the enrichment analysis.
-             Subsequently, LION/web ranks the input lipids by their value. The distributions of all LION-terms associated with the dataset
-             are compared to uniform distributions and evaluated by Kolmogorov-Smirnov-tests. A low p-value is returned when lipids associated with a 
-             certain LION-term are higher on top of the ranked list than one would expect by chance.'),
-          p('On the bottom of the page, there are some examples available to illustrate the workflow.')
-        ))
-      })
       
-      observeEvent(input$FShelp, {
-        showModal(modalDialog(
-          footer = modalButton("Ok"),
-          size = "m",
-          easyClose = TRUE,
-          title = "LION-enrichment by target list",
-          p('Provide two lists of lipids; a "hitlist" containing lipids that are evaluated for enrichment (lipids associated with a condition of interest, 
-          a sublist obtained by data-clustering, etc.), and a background set containing all the lipids in the experiment.'),
-          p('After clicking "submit", LION/web maps the input lipids to the LION-database. Only matched identifiers will be used in the enrichment analysis.
-             Subsequently, LION/web calculates a score of every LION-term that is associated with the dataset, for both the hitlist as the background set.
-             These scores are compared by Fisher-exact tests. A low p-value is returned when a certain LION-term is higher represented in the hitlist than 
-             one would expect by chance.'),
-          p('On the bottom of the page, there are some examples available to illustrate the workflow.')
-        ))
-      })
       
       output$tree <- renderTree({        ### LION-tree
         LIONstructure
