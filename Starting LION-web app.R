@@ -1,47 +1,51 @@
+## installation of R-package needed for LION/web
+########
 
-##install topOnto package and RSQLite v 0.11.4 with:
+if("devtools" %in% rownames(installed.packages()) == FALSE) {install.packages("devtools",  repos = c(CRAN = "http://cran.rstudio.com"))}
 library(devtools)
-install_github("hxin/topOnto")
+
+if("ggplot2" %in% rownames(installed.packages()) == FALSE) {install.packages("ggplot2",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("topOnto" %in% rownames(installed.packages()) == FALSE) {install_github("hxin/topOnto")}
+
+## install RQRLite 0.11.4
+if("RSQLite" %in% rownames(installed.packages()) == FALSE) {install.packages('https://cran.r-project.org/src/contrib/Archive/RSQLite/RSQLite_0.11.4.tar.gz', repos=NULL, type='source')}
+
+##install topOnto.LION.db package:
+if("topOnto.LION.db" %in% rownames(installed.packages()) == FALSE) {install_github("martijnmolenaar/topOnto.LION2.db/topOnto.LION.db")}
+
 
 source("https://bioconductor.org/biocLite.R")
 biocLite()
 
-install.packages('https://cran.r-project.org/src/contrib/Archive/RSQLite/RSQLite_0.11.4.tar.gz', repos=NULL, type='source')
+if("data.table" %in% rownames(installed.packages()) == FALSE) {install.packages("data.table",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("ggthemes" %in% rownames(installed.packages()) == FALSE) {install.packages("ggthemes",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("httr" %in% rownames(installed.packages()) == FALSE) {install.packages("httr",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("igraph" %in% rownames(installed.packages()) == FALSE) {install.packages("igraph", repos = c(CRAN = "http://cran.rstudio.com"))}
+if("shiny" %in% rownames(installed.packages()) == FALSE) {install.packages("shiny",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("shinyBS" %in% rownames(installed.packages()) == FALSE) {install.packages("shinyBS",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("shinythemes" %in% rownames(installed.packages()) == FALSE) {install.packages("shinythemes",  repos = c(CRAN = "http://cran.rstudio.com"))}
 
-##install topOnto.LION.db package with:
 
-install_github("martijnmolenaar/topOnto.LION2.db/topOnto.LION.db") 
+if("shinyTree" %in% rownames(installed.packages()) == FALSE) {install.packages("shinyTree",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("shinyWidgets" %in% rownames(installed.packages()) == FALSE) {install.packages("shinyWidgets",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("visNetwork" %in% rownames(installed.packages()) == FALSE) {install.packages("visNetwork",  repos = c(CRAN = "http://cran.rstudio.com"))}
 
-## load packages
-library(RSQLite)            ## for databases
-library(topOnto)            ## for ontology enrichment analysis
-library(topOnto.LION.db)    ## database with lipid ontologies
 
-#available via CRAN:
-
-library(igraph)             ## for network visualization, use vs 1.0.1
-library(visNetwork)
-library(GMD)
-
-library(shiny)
-library(shinythemes)
-library(shinyTree)
-library(shinyWidgets)
-
+## load libraries to check
 library(data.table)
 library(ggplot2)
 library(ggthemes)
-
-library(visNetwork)
+library(httr)
+library(igraph)
+library(RSQLite)
+library(shiny)
+library(shinyBS)
+library(shinythemes)
 library(shinyTree)
 library(shinyWidgets)
+library(topOnto)
+library('topOnto.LION.db')
+library(visNetwork)
 
-
-## LION/web
-
-library(shiny)
-
+## run LION/web
 runApp("OntologyApp")
-
-
-
