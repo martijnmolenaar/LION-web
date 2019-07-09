@@ -9,7 +9,8 @@ library(shinyBS)
 
 
 # Define UI for random distribution application 
-fluidPage(theme = shinytheme("cosmo"),
+#fluidPage(theme = shinytheme("cosmo"),
+fluidPage(theme = shinytheme("journal"),
           
           # Application title
           #titlePanel("LION/web | Lipid Ontology enrichment analysis for lipidomics"),
@@ -208,24 +209,24 @@ fluidPage(theme = shinytheme("cosmo"),
                                    p('The Lipid Ontology (LION) enrichment analysis web application (LION/web) is a novel bioinformatics tool for lipidomics that',
                                      'enables users to search for enriched LION-terms in lipidomic subsets. LION-terms contain detailed lipid classification',
                                      'by LIPIDMAPS, biophysical data, lipid functions and organelle associations.'),
+                                   p("Any comments, questions or suggestions? Do you want to add lipid annotations? Please use our contact form."),
                                    br(),
-                                  
-                                   "LION/web is currently under review.",
-                                   "Any comments, questions or suggestions? Do you want to add lipid annotations? Please use our contact form.",br(),
-                                   br(),
-                                   "A pre-print about LION/web is available on BioRxiv:",
-                                   br(),
+                                   p("Please cite:"),
                                    a('LION/web: a web-based ontology enrichment tool for lipidomic data analysis.',
-                                     href="https://doi.org/10.1101/398040", target="_blank"),br(),
-                                   em("Martijn R. Molenaar, Aike Jeucken, Tsjerk A. Wassenaar, Chris H. A. van de Lest, Jos F. Brouwers, J. Bernd Helms."), "BioRxiv (2018)",
+                                     href="https://doi.org/10.1093/gigascience/giz061", target="_blank"),br(),
+                                   tags$b("Gigascience. 2019 Jun 1;8(6). pii: giz061. doi: 10.1093/gigascience/giz061."),
+                                   br(),
+                                   em("Martijn R. Molenaar, Aike Jeucken, Tsjerk A. Wassenaar, Chris H. A. van de Lest, Jos F. Brouwers, J. Bernd Helms."), 
                                    br(),
                                    br(),
-                                   em("Biochemistry & Cell Biology, Universiteit Utrecht, The Netherlands"),
                                    br(),
-                                   em('LION/web v. 2019.01.10'),
+                                   p("Biochemistry & Cell Biology, Universiteit Utrecht, The Netherlands"),
+                                   'LION/web v. 2019.07.09',
                                    br(),
                                    
                                    br(),
+                                   
+                                   
                                    
                                    
                                    #h3('Example of the LION-structure for PS(34:2):'),
@@ -299,8 +300,14 @@ fluidPage(theme = shinytheme("cosmo"),
                                    ),
                           
                           tabPanel("LION network view", 
+                                   #br(),
+                                   #sliderInput("nrNodes", "level of detail", 16, min = 1, max = 30, step = 1),
+                                   #br(),
                                    visNetworkOutput("ontology.plot", height = 650),
-                                   img(src="legend.png", align = "right", height = '67px', width = '550px'))
+                                   #br(),
+                                   img(src="legend.png", align = "right", height = '67px', width = '550px'),
+                                   br(),
+                                   column(2, downloadButton("networkcoord", "Download...")))
                                    
                                    
               )

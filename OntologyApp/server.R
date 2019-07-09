@@ -16,14 +16,13 @@ pvalueExample1 <-  paste( paste(PM$lipids, "\t", PM$pvalues, sep = ""),    "\n",
 pvalueExample2 <-  paste( paste(MT$lipids, "\t", MT$pvalues, sep = ""),    "\n",    collapse = '',    sep = ""  )
 pvalueExample3 <-  paste( paste(ER$lipids, "\t", ER$pvalues, sep = ""),    "\n",    collapse = '',    sep = ""  )
 
-source(file  = "data/20190109 LION_tree_structure.R")
+source(file  = "data/20190704 LION_tree_structure.R")
 
 #### libraries
 
 require(shiny)
 require(visNetwork)
 require(data.table)
-#require(GMD)
 require(igraph)
 require(ggplot2)
 require(ggthemes)
@@ -31,6 +30,7 @@ library(shinyTree)
 library(shinyWidgets)
 library(shinyBS)
 library(httr)
+
 
 ## loading lipid ontology data
 require(RSQLite)
@@ -40,14 +40,8 @@ topOnto::initONT('LION')
 
 
 
-associationFile  <-  "data/20180614 LION_association.txt"
+associationFile  <-  "data/20190704 LION_association.txt"
 
-
-## LION term list for selection
-LIONTermList <- read.table(file  = "data/20180209 LIONterms.txt", sep="\t")
-LIONTermList$list <- as.list(LIONTermList[[2]])
-names(LIONTermList$list) <- LIONTermList[[1]]
-LIONTermList <- LIONTermList$list
 
 ## define functions
 
@@ -96,6 +90,17 @@ convertLipidNames <- function(name){
     ### end special cases
     if(grepl("\\d+:\\d+;\\d+",processed_input) & !grepl("\\d+:\\d+;\\d+:\\d+",processed_input)){    ### 32:1;1 format >> 32:1
       processed_input <- gsub(";\\d+","",processed_input)
+    }
+    ###############    
+    if(grepl("\\d+:\\d+:\\d+",processed_input)){    ### 32:1;1 format >> 32:1
+      #processed_input <- gsub(";\\d+","",processed_input)
+      parts <- unlist(strsplit(x = paste("_",processed_input,"_",sep=""), split = "\\d+:\\d+:\\d+"))
+      specialFAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+:\\d+", processed_input)))
+      specialFAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+", processed_input)))
+      processed_input[seq(from = 1, to = length(parts)*2, by = 2)] <- parts
+      processed_input[seq(from = 2, to = length(specialFAs)*2, by = 2)] <- specialFAs
+      processed_input <- gsub("^_|_$","",paste(processed_input, collapse = ""))
+      
     }
     
     ###  >> remove (FA 16:0), not intensively tested
@@ -273,7 +278,7 @@ convertLipidNames <- function(name){
       
     }
     
-
+    
     if(grepl('^P\\D\\(A-*',processed_input) ){      ########## ether lipids 20180605
       processed_input <- gsub('\\(A-*',"(O-",processed_input)    ##gsub('A-*',"(O-",processed_input)
     }
@@ -289,11 +294,11 @@ convertLipidNames <- function(name){
     
     
     ## reorder FAs
-    if (
+    if (         
       (length(unlist(regmatches(processed_input, gregexpr("\\d+:\\d+",        processed_input)))) > 1) &                         ## when more than 1 FA)
-      (length(unlist(regmatches(processed_input, gregexpr("[dtm](\\d+:\\d+)|[PO]-(\\d+:\\d+)", processed_input)))) < 1) &        ## unless it's SM(d18:1...) or P-18:1
-      (!grepl("0:0", processed_input))                           ## unless it's containing a 0:0 FA (=lyso, should be on second position))
-    ){                                                               
+      (length(unlist(regmatches(processed_input, gregexpr("[dtm](\\d+:\\d+)|[PO]-(\\d+:\\d+)", processed_input)))) < 1) 
+      #  (!grepl("0:0", processed_input))                           ## unless it's containing a 0:0 FA (=lyso, should be on second position))
+    ){  
       FAs <- t(as.data.frame(strsplit(unlist(
         regmatches(
           processed_input,
@@ -301,7 +306,14 @@ convertLipidNames <- function(name){
         )
       ), ":")))
       FAs <- as.data.frame(sapply(as.data.frame(FAs), as.numeric))
+      
+      ## added to sort lysoPCs
+      FAs[apply(FAs,1,function(i){paste(i, collapse = ":")}) == "0:0",1] <- 999  ## set 0:0 to 999:0 to order right
+      
       FAs <- FAs[order(FAs$V1, FAs$V2), ]
+      ## added to sort lysoPCs
+      FAs[apply(FAs,1,function(i){paste(i, collapse = ":")}) == "999:0",1] <- 0  ## reset 
+      
       FAs <- apply(FAs, 1, function(row) {
         paste(row[1], ":", row[2], sep = "")
       })
@@ -327,7 +339,7 @@ convertLipidNames <- function(name){
   
   
   
-}      ## 20190125
+}       ## 20190909  
 
 sendEmail <- function(subject = "LION/web usage", mail_message = "empty", from = "system"){
   url <- "emailserver"
@@ -391,8 +403,10 @@ associatedTerms <- function(lipid, ontologyObject, all = FALSE, reformat = FALSE
 
 ## read associations
 lipidID2TERM <- readMappings(file = associationFile)   ## topOnto function, but removes spaces
+### also add IDs as annotation, so that people can use LION:xxxxx as input
+lipidID2TERM <- c(lipidID2TERM,sapply(unique(unlist(lipidID2TERM)), function(ID){ID}, simplify = FALSE))
 
-# Define server
+# Define server logic for random distribution application
 function(input, output, session) {
   
   
@@ -658,28 +672,26 @@ function(input, output, session) {
       
     }
     
-    if(input$local_statistics == 3){   ### when 2-log FC values are selected
+    if(input$local_statistics == 3){   ### when ANOVA is selected
       
       input_data <- input_data()
       
       if (length(input$selectedConditions) > 1) {      ## minimum of 2 conditions needed
-        pValues <- sapply(1:length(input_data$IDs), function(lipid_nr) {
-          df <- melt(
-            data = sapply(input$selectedConditions, function(condition) {
-              input_data$matrix[lipid_nr,  unlist(input_data$meta[1,]) == condition]
-            }),
-            value.name = "signal",
-            variable.name = "condition"
-          )
-          names(df) <- c("l", "condition", "signal")
-          
-          model.df <- lm(signal ~ condition, data = df)
-          anova(model.df)['condition', 'Pr(>F)']
-        })
+        pValues <- 
+          sapply(1:length(input_data$IDs), function(lipid_nr){
+                       df <- do.call("rbind",sapply(input_data$conditions, function(condition){
+                         data.frame(l = NA,
+                                    condition = condition, 
+                                    signal = input_data$matrix[lipid_nr,  unlist(input_data$meta[1,]) == condition]
+                         )}, simplify = FALSE))
+                       
+                       model.df <- lm(signal ~ condition, data = df)
+                       anova(model.df)['condition','Pr(>F)']
+                     })
+
       } else {pValues = NA}
     
-          
-       
+      
       outputList <- list(data.frame(IDs = input_data()$IDs,
                                     pValues = pValues))
       
@@ -936,12 +948,12 @@ function(input, output, session) {
       
       lipidExistance$'LION ID' <-  unlist(lipidID2TERM)[match(lipidExistance$'simplified input',names(lipidID2TERM))]
       lipidExistance$'LION ID'[is.na(lipidExistance$'LION ID')] <- "not found"
-      
-      
+     
+      ## LION:IDs added to association table >> results in two matches, take first for now
       lipidExistance$'LION name' <- sapply(lipidExistance$'LION ID', function(ID){     ### look for LIONname
         output <- names(lipidID2TERM)[lipidID2TERM == ID]
         if(identical(output, character(0))){output <- "not found"}
-        output[!grepl("^SLM:|^LM..\\d+",output )]                  ## don't return names like LMGP04010883 or SLM:000042385
+        output[!grepl("^SLM:|^LM..\\d+",output )] [1]                 ## don't return names like LMGP04010883 or SLM:000042385
       })
       
       lipidExistance$'simplified input' <- NULL        ## remove this column, not interesting for user
@@ -1488,6 +1500,7 @@ function(input, output, session) {
             visPhysics(stabilization = TRUE) %>%
             visHierarchicalLayout(direction = "LR", levelSeparation = 250) %>%
             visInteraction(navigationButtons = TRUE)   %>% 
+            visOptions(highlightNearest = TRUE) %>%
             visPhysics(
               solver = "forceAtlas2Based",
               forceAtlas2Based = list(gravitationalConstant = -20)
@@ -1505,6 +1518,7 @@ function(input, output, session) {
         }
         
         
+        
         list(
           ONTdata = ONTdata,
           lipidExistance = lipidExistance,
@@ -1513,6 +1527,7 @@ function(input, output, session) {
           lipidReport = lipidReport,
           lipidsInTerms = lipidsInTerms,
           to_ggplot_display = to_ggplot_display,
+          edges_nodes = list(edges, nodes),
           to_display_network = to_display_network
           
         )
@@ -1528,6 +1543,7 @@ function(input, output, session) {
           lipidReport = NULL,
           lipidsInTerms = NULL,
           to_ggplot_display = NULL,
+          edges_nodes = NULL,
           to_display_network = NULL
           
         )
@@ -1536,7 +1552,59 @@ function(input, output, session) {
     
     
   })
+  
+  
+   output$networkcoord <- downloadHandler(
+    filename = paste("LION-network-job",isolate(input$submitB)+isolate(input$submitA), ".svg", sep=""),
+    content = function(file) {
+    
+    visNetworkProxy("ontology.plot") %>% visGetPositions()   ### does actually only works the second time
+    
+    if (!is.null(input$ontology.plot_positions)){
+      coords_base <-    do.call(rbind, input$ontology.plot_positions)
       
+      edges <- isolate(dataBlock()$edges_nodes[[1]])
+      nodes <- isolate(dataBlock()$edges_nodes[[2]])
+      
+      nodes$shape <- ifelse(nodes$shape == "box", "square", nodes$shape)
+      nodes$shape <- ifelse(nodes$shape == "triangle", "square", nodes$shape)
+      nodes$shape <- ifelse(nodes$shape == "dot", "circle", nodes$shape)
+      
+      nodes$size <- nodes$size / 2
+      nodes$size[nodes$shape == "square"] <- 10
+      
+      nodes$label.dist <- sqrt(nodes$size)/3.5
+      
+      colnames(edges)[match(c("from","to"),colnames(edges))] <- c("to","from")
+      
+      net = graph_from_data_frame(d = edges ,vertices = nodes,directed = T)
+      
+      layout <- layout_as_tree(net, flip.y = F, root = 1 , rootlevel = nodes$level)[,c(2,1)]
+      layout[,1] <- unlist(coords_base[,1]) / 200
+      layout[,2] <- unlist(coords_base[,2]) / 200
+      
+      #png(file, width = 6000, height = 6000, res = 600)
+      #plot(net, layout = layout,
+      #     vertex.label.cex=.4, #vertex.label.dist=1, 
+      #     vertex.label.degree = 1.5*pi, edge.arrow.size = .40,
+      #     vertex.label.color="black")
+      #dev.off()
+      
+      svg(file, width = 12, height = 12)
+      plot(net, layout = layout,
+           vertex.label.cex=.5, 
+           vertex.label.degree = 1.5*pi, edge.arrow.size = .40,
+           vertex.label.color="black")
+      dev.off()
+      
+      
+      }
+ 
+  })
+  #####
+  
+  
+  
   ### mapping percentage
   output$mapping_percentage <- renderText({          
     
@@ -1579,6 +1647,7 @@ function(input, output, session) {
       })
       
       output$downloadInput <- downloadHandler(
+        
         filename = function() {
           paste("LION-input-job",isolate(input$submitB)+isolate(input$submitA), ".csv", sep="")
           
@@ -1654,16 +1723,12 @@ function(input, output, session) {
         dataBlock()$to_display_network
       })
       
-      
-      updateSelectizeInput(session, 'LIONterms', 
-                           choices =  LIONTermList, 
-                           selected = NULL )
-      
+   
       ## email
       observe({
         if(is.null(input$send) || input$send==0) return(NULL)
         from <- isolate(input$from)
-        to <- "m.r.molenaar@uu.nl"
+        to <- "____@___"
         subject <- isolate(input$subject)
         msg <- isolate(input$message)
         
