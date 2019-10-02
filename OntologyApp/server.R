@@ -341,13 +341,46 @@ convertLipidNames <- function(name){
   
 }       ## 20190909  
 
+simplifyLipidnames <- function(name){
+  options(stringsAsFactors = FALSE)
+  
+  sapply(name, function(input) {
+    processed_input <- input
+    
+    to_simplify <-
+      unlist(regmatches(processed_input,    gregexpr("[dt]*\\d+:\\d+([/_]+\\d+:\\d+)+", processed_input)    ))
+    to_simplify <- to_simplify[!grepl("^0:0|[_/]+0:0",to_simplify)]
+    
+    if (length(to_simplify) > 0) {
+      simplified <-  sapply(to_simplify, function(part_i) {
+        FAs <- unlist(regmatches(part_i,  gregexpr("\\d+:\\d+", part_i)))
+        Cs <-  sum(sapply(strsplit(FAs, split = ":"), function(i) {  as.numeric(i[1])     }))
+        DBs <- sum(sapply(strsplit(FAs, split = ":"), function(i) {  as.numeric(i[2])  }))
+        paste(Cs, ":", DBs, sep = "")
+      })
+      
+      nameLUT <-
+        data.frame(original = paste('\\Q', to_simplify, '\\E', sep = ""),
+                   simplified = simplified)
+      
+      for (i in 1:dim(nameLUT)[1]) {
+        processed_input <-
+          gsub(nameLUT$original[i], nameLUT$simplified[i], processed_input)
+      }
+      
+      processed_input
+    } else {processed_input}
+  })
+  
+}   ### 20190916
+
 sendEmail <- function(subject = "LION/web usage", mail_message = "empty", from = "system"){
-  url <- "emailserver"
-  api_key <- "xxxxxxx"
+  url <- "xxxx"
+  api_key <- "xxx"
   the_body <-
     list(
-      from="webmaster",
-      to="email@email.com",
+      from="LION/web <xxx>",
+      to="xxx",
       subject=subject,
       text=paste(mail_message,"\n\n=====================\nfrom: ",from,"\n=====================\nLION/web: www.lipidontology.com", sep= "")
     )
@@ -788,14 +821,22 @@ function(input, output, session) {
   )
   
   
+  observe({
+    input$download_network_bs  
+      visNetworkProxy("ontology.plot") %>% visGetPositions()   
+      #if(!is.null(input$ontology.plot_positions)){
+      #  print( do.call(rbind, input$ontology.plot_positions))
+      #}  
+  })
+  
   observeEvent(input$exampleB1, {
-    updateTextAreaInput(session, "listwPvalues",  value = pvalueExample1)
+     updateTextAreaInput(session, "listwPvalues",  value = pvalueExample1)
   })
   observeEvent(input$exampleB2, {
-    updateTextAreaInput(session, "listwPvalues",  value = pvalueExample2)
+      updateTextAreaInput(session, "listwPvalues",  value = pvalueExample2)
   })
   observeEvent(input$exampleB3, {
-    updateTextAreaInput(session, "listwPvalues",  value = pvalueExample3)
+       updateTextAreaInput(session, "listwPvalues",  value = pvalueExample3)
   })
   observeEvent(input$plot_click, {           ### display term info in console
     termInfo <- dataBlock()$to_ggplot_display$data
@@ -947,8 +988,39 @@ function(input, output, session) {
     } else {
       
       lipidExistance$'LION ID' <-  unlist(lipidID2TERM)[match(lipidExistance$'simplified input',names(lipidID2TERM))]
+      
+      lipidExistance <-
+      do.call("rbind",
+      apply(lipidExistance, 1, function(input_row_i){
+          simplified_input <- input_row_i[2]
+          ID_i <- unlist(lipidID2TERM[which(names(lipidID2TERM) %in% simplified_input)])
+          if(length(ID_i)<1 & isolate(input$SmartMatching)){         ### if 'smartmatching' is on, simplify lipidnames
+            ID_i <- unlist(lipidID2TERM[which(names(lipidID2TERM) %in% simplifyLipidnames(simplified_input))])
+          } 
+          if(length(ID_i)<1){
+            ID_i <- NA
+          } 
+          
+          LION_name_i <- unlist(names(lipidID2TERM)[which(names(lipidID2TERM) %in% simplified_input)])
+          
+          if(length(LION_name_i)<1 & isolate(input$SmartMatching)){       ### if 'smartmatching' is on, simplify lipidnames
+            LION_name_i <- unlist(names(lipidID2TERM)[which(names(lipidID2TERM) %in% simplifyLipidnames(simplified_input))])
+          }
+          if(length(LION_name_i)<1){
+            LION_name_i <- NA
+          }
+      
+          data.frame(input = input_row_i[1],
+                   'simplified input' = simplified_input,
+                   'LION ID' = ID_i,
+                   'LION name' = LION_name_i)
+        
+      }))
+      colnames(lipidExistance) <- c('input','simplified input','LION ID','LION name')
+      
       lipidExistance$'LION ID'[is.na(lipidExistance$'LION ID')] <- "not found"
-     
+      
+    
       ## LION:IDs added to association table >> results in two matches, take first for now
       lipidExistance$'LION name' <- sapply(lipidExistance$'LION ID', function(ID){     ### look for LIONname
         output <- names(lipidID2TERM)[lipidID2TERM == ID]
@@ -959,6 +1031,11 @@ function(input, output, session) {
       lipidExistance$'simplified input' <- NULL        ## remove this column, not interesting for user
       
       ## lipidExistance <- lipidExistance[order(lipidExistance$'LION ID'),]   ## reorder based on matching
+      
+      ## use matched lipids as assocation table 
+      matched_lipidID2TERM <- as.list(lipidExistance$`LION ID`)
+      names(matched_lipidID2TERM) <- lipidExistance$input
+      
       lipidExistance
     }
     
@@ -977,9 +1054,8 @@ function(input, output, session) {
           if ((is.null(isolate(input$sublist)) ||
                isolate(input$sublist) == "") == FALSE) {
             lipidIDs <-
-              list(sublist = convertLipidNames(  unlist(strsplit(isolate(input$sublist), "\n"))  ),
-                   backgroundlist = convertLipidNames(   unlist(strsplit(isolate(input$background), "\n"))  )
-                   
+              list(sublist = unlist(strsplit(isolate(input$sublist), "\n")), #convertLipidNames(  unlist(strsplit(isolate(input$sublist), "\n"))  ),
+                   backgroundlist =  unlist(strsplit(isolate(input$background), "\n"))    ##convertLipidNames(   unlist(strsplit(isolate(input$background), "\n"))  )
                    )
             
             
@@ -994,7 +1070,7 @@ function(input, output, session) {
                 ontology = "LION",
                 allGenes = lipidIDlogical,
                 annot = annFUN.gene2GO,
-                gene2GO = lipidID2TERM) 
+                gene2GO = matched_lipidID2TERM) 
             } else {
               
               names(lipidIDlogical)[1] <- "PC(38:1)"                   ### make a fake object
@@ -1006,7 +1082,7 @@ function(input, output, session) {
                 ontology = "LION",
                 allGenes = lipidIDlogical,
                 annot = annFUN.gene2GO,
-                gene2GO = lipidID2TERM)
+                gene2GO = matched_lipidID2TERM)
             }
             
             
@@ -1105,7 +1181,6 @@ function(input, output, session) {
                 n[['remove']]
               })))
               
-              print(to_display[to_display$TERM.ID %in% test_similarity,]  )
               to_display <- to_display[!(to_display$TERM.ID %in% test_similarity),]  
               
             }
@@ -1141,7 +1216,9 @@ function(input, output, session) {
                input_listwPvalues == "") == FALSE) {
             pValueList <- list()
             ### seperate by tab or | >> comma gives problems with input: PC(18:1(3Z)/20:4(3Z,6Z,9Z,12Z))
-            pValueList$input <-   convertLipidNames(  transpose(strsplit(unlist(strsplit(input_listwPvalues, "\n")), "[\t\\|]"))[[1]]  )
+            
+            #pValueList$input <-   convertLipidNames(  transpose(strsplit(unlist(strsplit(input_listwPvalues, "\n")), "[\t\\|]"))[[1]]  )
+            pValueList$input <-   transpose(strsplit(unlist(strsplit(input_listwPvalues, "\n")), "[\t\\|]"))[[1]] 
             pValueList$pvalues <-   transpose(strsplit(unlist(strsplit(input_listwPvalues, "\n")), "[\t\\|]")) [[2]] 
             pValueList <- as.data.frame(pValueList)
             pValueList$pvalues <- as.numeric(pValueList$pvalues)
@@ -1159,7 +1236,7 @@ function(input, output, session) {
                 ontology = "LION",
                 allGenes = lipidIDrank,
                 annot = annFUN.gene2GO,
-                gene2GO = lipidID2TERM,
+                gene2GO = matched_lipidID2TERM,
                 geneSelectionFun = mySel
               )
             } else {       ### make a fake object
@@ -1169,7 +1246,7 @@ function(input, output, session) {
                 ontology = "LION",
                 allGenes = lipidIDrank,
                 annot = annFUN.gene2GO,
-                gene2GO = lipidID2TERM,
+                gene2GO = matched_lipidID2TERM,
                 geneSelectionFun = mySel
               )
             }
@@ -1178,7 +1255,7 @@ function(input, output, session) {
             resultFis <-
               runTest(ONTdata,
                       algorithm = "classic",
-                      statistic = "ks")
+                      statistic = isolate(input$ks_sided))
             
             incProgress(.7, detail = paste("enrichment statistics"))
             
@@ -1278,7 +1355,6 @@ function(input, output, session) {
                   n[['remove']]
                 })))
               
-              print(to_display[to_display$TERM.ID %in% test_similarity,]  )
               to_display <- to_display[!(to_display$TERM.ID %in% test_similarity),]  
               
             }
@@ -1513,12 +1589,16 @@ function(input, output, session) {
         }
         
         if(isolate(input$EmailMissingLipids)){   ## email missing lipids when option is set
-          #sendEmail(subject = "missing annotations",mail_message = paste(subset(lipidExistance,`LION ID`=="not found")$input, collapse = "\n"))
+          
           sendEmail(subject = "missing annotations", mail_message = paste(apply(lipidExistance, 1, function(row){paste(row, collapse = "\t")}), collapse = "\n"))
         }
         
         
         
+        ### now LUT is available, match LION names correctly
+        lipidExistance$'LION name' <- LUT$Discription[match(lipidExistance$'LION ID', LUT$ID)]
+        lipidExistance$'LION name'[is.na(lipidExistance$'LION name')] <- "not found"
+       
         list(
           ONTdata = ONTdata,
           lipidExistance = lipidExistance,
@@ -1555,7 +1635,7 @@ function(input, output, session) {
   
   
    output$networkcoord <- downloadHandler(
-    filename = paste("LION-network-job",isolate(input$submitB)+isolate(input$submitA), ".svg", sep=""),
+    filename = paste("LION-network-job",isolate(input$submitB)+isolate(input$submitA), ".zip", sep=""),
     content = function(file) {
     
     visNetworkProxy("ontology.plot") %>% visGetPositions()   ### does actually only works the second time
@@ -1576,6 +1656,9 @@ function(input, output, session) {
       nodes$label.dist <- sqrt(nodes$size)/3.5
       
       colnames(edges)[match(c("from","to"),colnames(edges))] <- c("to","from")
+      edges <- edges[,colnames(edges)[c(2,1,3,4,5)]]
+      
+      edges <- edges[(edges$from %in% nodes$id) & (edges$to %in% nodes$id),]  
       
       net = graph_from_data_frame(d = edges ,vertices = nodes,directed = T)
       
@@ -1583,19 +1666,31 @@ function(input, output, session) {
       layout[,1] <- unlist(coords_base[,1]) / 200
       layout[,2] <- unlist(coords_base[,2]) / 200
       
-      #png(file, width = 6000, height = 6000, res = 600)
-      #plot(net, layout = layout,
-      #     vertex.label.cex=.4, #vertex.label.dist=1, 
-      #     vertex.label.degree = 1.5*pi, edge.arrow.size = .40,
-      #     vertex.label.color="black")
-      #dev.off()
+      interactive_network <- isolate(dataBlock()$to_display_network)
       
-      svg(file, width = 12, height = 12)
+      save(list = c("net","layout", "edges","nodes","interactive_network"), file = "network.Rdata")
+           
+      png(paste("LION-network-job",isolate(input$submitB)+isolate(input$submitA), ".png", sep=""), width = 6000, height = 6000, res = 600)
+      plot(net, layout = layout,
+           vertex.label.cex=.4,
+           vertex.label.degree = 1.5*pi, edge.arrow.size = .40,
+           vertex.label.color="black")
+      dev.off()
+      
+      svg(paste("LION-network-job",isolate(input$submitB)+isolate(input$submitA), ".svg", sep=""), width = 12, height = 12)
       plot(net, layout = layout,
            vertex.label.cex=.5, 
            vertex.label.degree = 1.5*pi, edge.arrow.size = .40,
            vertex.label.color="black")
       dev.off()
+      
+      Rfile <- read.delim("data/display_network.R", header = F)
+      write.table(file = "display_network.R",Rfile$V1, quote = F, row.names = F, col.names = F)
+      
+      zip(zipfile=file, files=c( paste("LION-network-job",isolate(input$submitB)+isolate(input$submitA), ".png", sep=""), 
+                                 paste("LION-network-job",isolate(input$submitB)+isolate(input$submitA), ".svg", sep=""),
+                                 "network.Rdata","display_network.R",include_directories=FALSE)
+      )
       
       
       }
@@ -1640,9 +1735,7 @@ function(input, output, session) {
    
       output$value <- renderTable({
         table <- dataBlock()$lipidExistance
-        #if(isolate(input$EmailMissingLipids)){   ## email missing lipids when option is set
-        #  sendEmail(subject = "missing annotations",mail_message = paste(subset(table,`LION ID`=="not found")$input, collapse = "\n"))
-        #}
+        
         table
       })
       
@@ -1728,7 +1821,7 @@ function(input, output, session) {
       observe({
         if(is.null(input$send) || input$send==0) return(NULL)
         from <- isolate(input$from)
-        to <- "____@___"
+        to <- "m.r.molenaar@uu.nl"
         subject <- isolate(input$subject)
         msg <- isolate(input$message)
         

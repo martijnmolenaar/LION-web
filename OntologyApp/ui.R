@@ -40,6 +40,17 @@ fluidPage(theme = shinytheme("journal"),
                                                br(),
                                                popify(placement = "right", title = "Info", options=list(container="body"),
                                                  materialSwitch(
+                                                   inputId = "SmartMatching",
+                                                   value = TRUE,
+                                                   label = "Use 'smartmatching'",
+                                                   status = 'primary',
+                                                   right = TRUE
+                                                 ),
+                                               content = "If possible, unmatched lipids are associated with parents (for instance, PC(13:2/21:3) (not present) to PC(34:5) (present)"
+                                               ), 
+                                               br(),
+                                               popify(placement = "right", title = "Info", options=list(container="body"),
+                                                 materialSwitch(
                                                    inputId = "EmailMissingLipids",
                                                    label = "Automatically send unmatched lipids to LION-team",
                                                    status = 'primary',
@@ -110,20 +121,25 @@ fluidPage(theme = shinytheme("journal"),
                                                                       ),
                                                                       content = 'Provide a list of metabolites with numeric values (comma or tab seperated) to rank the input. Select the correct ranking directions with the option "ranking direction" below.'
                                                                     ),
-                                                                    br(), 
+                                                                    
+                                                                    bsCollapse(id = "KSsettings",
+                                                                               bsCollapsePanel("K-S settings", 
+                                                                                                      radioButtons("ranking", "ranking direction",
+                                                                                                                     c("from low to high" = "ascending",
+                                                                                                                       "from high to low" = "descending")),
+                                                                                                      radioButtons("ks_sided", "alternative hypothesis",
+                                                                                                                     c("one-tailed (ECDF is higher)" = "ks",
+                                                                                                                       "two-tailed" = "ks2"))
+                                                                               )
+                                                                    ),
                                                                     fluidRow(
-                                                                      #column(width = 1,actionButton("KShelp", "",icon = icon(name = "question",lib = "font-awesome"))),
                                                                       popify(placement = "top", title = "Info",
-                                                                      column(offset = 0,#style='margin-left:2%;' , 
-                                                                             width = 12, 
-                                                                             actionButton("submitB","  Submit",
-                                                                                          icon = icon("lightbulb-o", lib = "font-awesome"))
-                                                                      ),content = 'After clicking "submit", LION/web matches the input lipids to the LION-database. Only matched identifiers will be used in the enrichment analysis. Subsequently, LION/web ranks the input lipids by the provided numeric value. The distributions of all LION-terms associated with the dataset are compared to uniform distributions and evaluated by Kolmogorov-Smirnov-tests. A low p-value is returned when lipids associated with a certain LION-term are higher on top of the ranked list than one would expect by chance.')), 
+                                                                             column(offset = 0,#style='margin-left:2%;' , 
+                                                                                    width = 12, 
+                                                                                    actionButton("submitB","  Submit",
+                                                                                                 icon = icon("lightbulb-o", lib = "font-awesome"))
+                                                                             ),content = 'After clicking "submit", LION/web matches the input lipids to the LION-database. Only matched identifiers will be used in the enrichment analysis. Subsequently, LION/web ranks the input lipids by the provided numeric value. The distributions of all LION-terms associated with the dataset are compared to uniform distributions and evaluated by Kolmogorov-Smirnov-tests. A low p-value is returned when lipids associated with a certain LION-term are higher on top of the ranked list than one would expect by chance.')), 
                                                                     br(),
-                                                                    br(),
-                                                                    radioButtons("ranking", "ranking direction",
-                                                                                 c("from low to high" = "ascending",
-                                                                                   "from high to low" = "descending")),
                                                                     br(),
                                                                     actionLink("exampleB1", "example 1 (plasma membrane vs ER fraction)*"),
                                                                     br(),
@@ -202,10 +218,8 @@ fluidPage(theme = shinytheme("journal"),
             mainPanel(
               tabsetPanel(id = "tabs", type = "tabs", 
                           tabPanel("General information", 
-                                   #br(),
-                                   #tableOutput("value"),
-                                   #hr(),
-                                   h3("About LION/web"),
+                                   
+                                   h3("LION/web: LION enrichment analysis"),
                                    p('The Lipid Ontology (LION) enrichment analysis web application (LION/web) is a novel bioinformatics tool for lipidomics that',
                                      'enables users to search for enriched LION-terms in lipidomic subsets. LION-terms contain detailed lipid classification',
                                      'by LIPIDMAPS, biophysical data, lipid functions and organelle associations.'),
@@ -221,18 +235,11 @@ fluidPage(theme = shinytheme("journal"),
                                    br(),
                                    br(),
                                    p("Biochemistry & Cell Biology, Universiteit Utrecht, The Netherlands"),
-                                   'LION/web v. 2019.07.09',
+                                   'LION/web v. 2019.10.01',
                                    br(),
                                    
                                    br(),
-                                   
-                                   
-                                   
-                                   
-                                   #h3('Example of the LION-structure for PS(34:2):'),
                                    br()
-                                   #img(src="LION.png", align = "center", height = '927px', width = '1003px')
-                                   
                                    
                                    ),
                           tabPanel("LION input", 
@@ -274,7 +281,6 @@ fluidPage(theme = shinytheme("journal"),
                           tabPanel("LION enrichment graph", 
                                    br(),
                                    plotOutput("ontology.graph", height = 650
-                                               #click = "plot_click"
                                                ),
                                    fluidRow(
                                      column(
@@ -300,14 +306,13 @@ fluidPage(theme = shinytheme("journal"),
                                    ),
                           
                           tabPanel("LION network view", 
-                                   #br(),
-                                   #sliderInput("nrNodes", "level of detail", 16, min = 1, max = 30, step = 1),
-                                   #br(),
                                    visNetworkOutput("ontology.plot", height = 650),
-                                   #br(),
                                    img(src="legend.png", align = "right", height = '67px', width = '550px'),
-                                   br(),
-                                   column(2, downloadButton("networkcoord", "Download...")))
+                                   br(),br(),br(),br(),
+                                   bsCollapse(id = "download_network_bs",
+                                              bsCollapsePanel(title = "Download network", 
+                                                              column(2, downloadButton("networkcoord", "Download as ZIP")))
+                                   ))
                                    
                                    
               )
