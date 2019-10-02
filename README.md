@@ -1,4 +1,4 @@
-# LION/web enrichment analysis
+# LION/web: LION enrichment analysis
 
 App available online via [lipidontology.com](http://www.lipidontology.com)
 
@@ -10,7 +10,7 @@ Please [cite](https://academic.oup.com/gigascience/article/8/6/giz061/5505544):
 
 
 
-## installation of R-package needed for LION/web
+## installation of R-packages needed for LION/web
 ```R
 if("devtools" %in% rownames(installed.packages()) == FALSE) {install.packages("devtools",  repos = c(CRAN = "http://cran.rstudio.com"))}
 library(devtools)
@@ -41,7 +41,7 @@ if("shinyWidgets" %in% rownames(installed.packages()) == FALSE) {install.package
 if("visNetwork" %in% rownames(installed.packages()) == FALSE) {install.packages("visNetwork",  repos = c(CRAN = "http://cran.rstudio.com"))}
 ```
 
-## load libraries to check
+## Load libraries to check installation
 
 ```R
 library(data.table)
