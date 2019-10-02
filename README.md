@@ -2,10 +2,10 @@
 
 App available online via [lipidontology.com](http://www.lipidontology.com)
 
-Please [cite](https://academic.oup.com/gigascience/article/8/6/giz061/5505544):
 
+Please [cite](https://academic.oup.com/gigascience/article/8/6/giz061/5505544):
 > **LION/web: a web-based ontology enrichment tool for lipidomic data analysis.**
-> Martijn R Molenaar,  Aike Jeucken,  Tsjerk A Wassenaar,  Chris H A van de Lest, Jos F Brouwers,  J Bernd Helms
+> Martijn R Molenaar,  Aike Jeucken,  Tsjerk A Wassenaar,  Chris H A van de Lest, Jos F Brouwers,  J Bernd Helms. 
 > *GigaScience, Volume 8, Issue 6, June 2019, giz061, https://doi.org/10.1093/gigascience/giz061*
 
 
