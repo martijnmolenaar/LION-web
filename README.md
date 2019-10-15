@@ -16,7 +16,7 @@ if("devtools" %in% rownames(installed.packages()) == FALSE) {install.packages("d
 library(devtools)
 
 if("ggplot2" %in% rownames(installed.packages()) == FALSE) {install.packages("ggplot2",  repos = c(CRAN = "http://cran.rstudio.com"))}
-if("topOnto" %in% rownames(installed.packages()) == FALSE) {install_github("hxin/topOnto")}
+if("topOnto" %in% rownames(installed.packages()) == FALSE) {install_github("martijnmolenaar/topOnto")}
 
 ## install RQRLite 0.11.4
 if("RSQLite" %in% rownames(installed.packages()) == FALSE) {install.packages('https://cran.r-project.org/src/contrib/Archive/RSQLite/RSQLite_0.11.4.tar.gz', repos=NULL, type='source')}
