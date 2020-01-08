@@ -1,0 +1,230 @@
+"lipids","cluster"
+"GPA(30:1)",1
+"GPA(36:2)",1
+"GPA(38:5)",1
+"GPCho(32:2)",1
+"GPCho(32:1)",1
+"GPCho(34:3)",1
+"GPCho(34:2)",1
+"GPCho(34:1)",1
+"GPCho(36:3)",1
+"GPCho(36:2)",1
+"GPCho(36:1)",1
+"GPCho(38:6)",1
+"GPCho(40:7)",1
+"GPCho(40:6)",1
+"GPCho(40:4)",1
+"GPSer(36:0)",1
+"GPSer(42:4)",1
+"GPSer(42:3)",1
+"GPIns(36:5)",1
+"GPIns(36:4)",1
+"GPIns(36:3)",1
+"GPIns(40:3)",1
+"GPCho(O-36:4)",1
+"GPCho(O-36:2)",1
+"GPEtn(O-32:0)",1
+"GPEtn(O-38:3)",1
+"Ceramide C26:1",1
+"DHCeramide C26:1",1
+"DHHexosylceramide C24:1",1
+"DHHexosylceramide C26",1
+"Sphingomyelin C20",1
+"DHSphingomyelin C22",1
+"DHSphingomyelin C26",1
+"22R-hydroxy-cholesterol",1
+"7-oxo-cholesterol",1
+"GPA(30:0)",2
+"GPCho(34:0)",2
+"GPCho(O-36:3)",2
+"GPCho(O-38:5)",2
+"GPEtn(O-36:1)",2
+"GPEtn(O-38:1)",2
+"Lanosterol",2
+"GPA(32:4)",3
+"GPA(34:2)",3
+"GPCho(38:5)",3
+"GPCho(40:2)",3
+"GPIns(40:6)",3
+"Ceramide C16 ",3
+"Ceramide C18",3
+"Ceramide C20",3
+"Ceramide C22",3
+"Ceramide C24:1",3
+"Ceramide C24",3
+"Ceramide C26",3
+"DHCeramide C16 ",3
+"DHCeramide C18",3
+"DHCeramide C20",3
+"DHCeramide C22",3
+"DHCeramide C24:1",3
+"DHCeramide C24",3
+"DHCeramide C26",3
+"DHHexosylceramide C20",3
+"DHHexosylceramide C26:1",3
+"DHSphingomyelin C20",3
+"DHSphingomyelin C26:1",3
+"4b-hydroxy-cholesterol",3
+"6a-hydroxy-cholestanol",3
+"7a-hydroxy-cholesterol",3
+"GPA(32:1)",4
+"GPA(32:0)",4
+"GPA(34:0)",4
+"GPA(36:3)",4
+"GPA(36:0)",4
+"GPA(38:4)",4
+"GPA(38:3)",4
+"GPA(38:2)",4
+"GPA(38:1)",4
+"GPA(40:3)",4
+"GPSer(34:2)",4
+"GPSer(36:4)",4
+"GPSer(40:0)",4
+"GPSer(42:1)",4
+"GPSer(42:0)",4
+"GPIns(34:2)",4
+"GPIns(38:1)",4
+"GPGro(40:8)",4
+"Cholesterol",4
+"Desmosterol",4
+"24-25-epoxy-cholesterol",4
+"25-hydroxy-cholesterol",4
+"Cholestenone",4
+"GPA(34:1)",5
+"GPA(36:1)",5
+"GPCho(28:0)",5
+"GPCho(32:0)",5
+"GPCho(38:1)",5
+"GPIns(36:1)",5
+"GPGro(32:0)",5
+"GPGro(34:1)",5
+"GPGro(34:0)",5
+"GPCho(P-36:4)",5
+"GPA(40:6)",6
+"GPA(40:1)",6
+"GPA(40:0)",6
+"GPSer(34:1)",6
+"GPSer(34:0)",6
+"GPSer(36:2)",6
+"GPSer(36:1)",6
+"GPSer(38:4)",6
+"GPSer(38:3)",6
+"GPSer(38:2)",6
+"GPSer(38:1)",6
+"GPSer(40:6)",6
+"GPSer(40:5)",6
+"GPSer(40:4)",6
+"GPSer(40:3)",6
+"GPSer(40:2)",6
+"GPSer(40:1)",6
+"GPGro(34:3)",6
+"GPGro(36:4)",6
+"GPEtn(O-38:2)",6
+"GPA(40:4)",7
+"GPCho(36:4)",7
+"GPCho(38:4)",7
+"GPCho(38:2)",7
+"GPCho(38:0)",7
+"GPCho(40:1)",7
+"GPCho(42:2)",7
+"GPCho(42:1)",7
+"GPEtn(32:0)",7
+"GPEtn(34:1)",7
+"GPEtn(34:0)",7
+"GPEtn(36:1)",7
+"GPEtn(36:0)",7
+"GPEtn(38:6)",7
+"GPEtn(38:5)",7
+"GPEtn(38:4)",7
+"GPEtn(38:3)",7
+"GPEtn(38:2)",7
+"GPEtn(38:1)",7
+"GPEtn(38:0)",7
+"GPEtn(40:6)",7
+"GPEtn(40:5)",7
+"GPEtn(40:4)",7
+"GPSer(38:5)",7
+"GPIns(36:2)",7
+"GPIns(38:5)",7
+"GPIns(38:4)",7
+"GPIns(38:3)",7
+"GPIns(38:2)",7
+"GPIns(40:7)",7
+"GPIns(40:4)",7
+"GPGro(34:2)",7
+"GPGro(36:3)",7
+"GPGro(36:2)",7
+"GPGro(38:5)",7
+"GPGro(38:4)",7
+"GPGro(38:3)",7
+"GPGro(38:2)",7
+"GPGro(40:7)",7
+"GPGro(40:6)",7
+"GPGro(40:5)",7
+"GPGro(40:4)",7
+"GPGro(40:3)",7
+"CL (68:3)",7
+"CL (70:3)",7
+"GPCho(36:0)",8
+"GPSer(42:2)",8
+"GPIns(34:1)",8
+"GPIns(36:0)",8
+"GPIns(38:6)",8
+"GPIns(40:5)",8
+"GPGro(32:1)",8
+"GPGro(36:1)",8
+"GPGro(38:1)",8
+"GPGro(40:2)",8
+"CL (66:5)",8
+"CL (66:4)",8
+"CL (66:3)",8
+"CL (68:5)",8
+"CL (68:4)",8
+"CL (68:2)",8
+"CL (70:6)",8
+"CL (70:5)",8
+"CL (70:4)",8
+"CL (72:7)",8
+"CL (72:6)",8
+"CL (72:5)",8
+"CL (72:4)",8
+"CoQ-9",8
+"CoQ-10",8
+"DOL-18",8
+"DOL-19",8
+"DOL-20",8
+"GPEtn(34:2)",9
+"GPEtn(36:4)",9
+"GPEtn(36:3)",9
+"GPEtn(36:2)",9
+"GPEtn(O-36:5)",9
+"GPEtn(O-36:4)",9
+"GPEtn(O-36:3)",9
+"GPEtn(O-36:2)",9
+"GPEtn(O-38:5)",9
+"CL (66:2)",10
+"Hexosylceramide C16 ",10
+"Hexosylceramide C18",10
+"Hexosylceramide C20",10
+"Hexosylceramide C22",10
+"Hexosylceramide C24:1",10
+"Hexosylceramide C24",10
+"Hexosylceramide C26:1",10
+"Hexosylceramide C26",10
+"DHHexosylceramide C16 ",10
+"DHHexosylceramide C18",10
+"DHHexosylceramide C22",10
+"DHHexosylceramide C24",10
+"Sphingomyelin C16 ",10
+"Sphingomyelin C18",10
+"Sphingomyelin C22",10
+"Sphingomyelin C24:1",10
+"Sphingomyelin C24",10
+"Sphingomyelin C26:1",10
+"Sphingomyelin C26",10
+"DHSphingomyelin C16 ",10
+"DHSphingomyelin C18",10
+"DHSphingomyelin C24:1",10
+"DHSphingomyelin C24",10
+"7-dehydro-cholesterol",10
+"27-hydroxy-cholesterol",10
