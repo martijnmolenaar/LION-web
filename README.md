@@ -34,14 +34,13 @@ if("igraph" %in% rownames(installed.packages()) == FALSE) {install.packages("igr
 if("shiny" %in% rownames(installed.packages()) == FALSE) {install.packages("shiny",  repos = c(CRAN = "http://cran.rstudio.com"))}
 if("shinyBS" %in% rownames(installed.packages()) == FALSE) {install.packages("shinyBS",  repos = c(CRAN = "http://cran.rstudio.com"))}
 if("shinythemes" %in% rownames(installed.packages()) == FALSE) {install.packages("shinythemes",  repos = c(CRAN = "http://cran.rstudio.com"))}
-
-
 if("shinyTree" %in% rownames(installed.packages()) == FALSE) {install.packages("shinyTree",  repos = c(CRAN = "http://cran.rstudio.com"))}
 if("shinyWidgets" %in% rownames(installed.packages()) == FALSE) {install.packages("shinyWidgets",  repos = c(CRAN = "http://cran.rstudio.com"))}
 if("visNetwork" %in% rownames(installed.packages()) == FALSE) {install.packages("visNetwork",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("formattable" %in% rownames(installed.packages()) == FALSE) {install.packages("formattable",  repos = c(CRAN = "http://cran.rstudio.com"))}
 ```
 
-## Load libraries to check installation
+## Load all necessary libraries to check installation
 
 ```R
 library(data.table)
@@ -58,6 +57,7 @@ library(shinyWidgets)
 library(topOnto)
 library('topOnto.LION.db')
 library(visNetwork)
+library(formattable)
 ```
 
 ## run LION/web app
