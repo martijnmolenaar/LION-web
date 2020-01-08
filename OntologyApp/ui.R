@@ -4,15 +4,12 @@ require(visNetwork)
 library(shinyTree)
 library(shinyWidgets)
 library(shinyBS)
+library(formattable)
 
 ##
 
-
-# Define UI for random distribution application 
-#fluidPage(theme = shinytheme("cosmo"),
 fluidPage(theme = shinytheme("journal"),
           
-          # Application title
           #titlePanel("LION/web | Lipid Ontology enrichment analysis for lipidomics"),
           br(),
           
@@ -42,11 +39,22 @@ fluidPage(theme = shinytheme("journal"),
                                                  materialSwitch(
                                                    inputId = "SmartMatching",
                                                    value = TRUE,
-                                                   label = "Use 'smartmatching'",
+                                                   label = "Use 'smartmatching' (beta)",
                                                    status = 'primary',
                                                    right = TRUE
                                                  ),
-                                               content = "If possible, unmatched lipids are associated with parents (for instance, PC(13:2/21:3) (not present) to PC(34:5) (present)"
+                                               content = "If possible, unmatched lipids are associated with related LION-terms: `TG(O-16:0/18:2/22:6)`	is associated with `alkyldiacylglycerols`, `C16:0`, `C18:2`, and `C22:6`"
+                                               ), 
+                                               br(),
+                                               popify(placement = "right", title = "Info", options=list(container="body"),
+                                                      materialSwitch(
+                                                        inputId = "FAprediction",
+                                                        value = FALSE,
+                                                        label = "Predict fatty acid assocations (beta)",
+                                                        status = 'primary',
+                                                        right = TRUE
+                                                      ),
+                                                      content = "For sum-formatted phospholipids, e.g. PC(34:1), predict the most likely fatty acid assocations, based on reported fatty acid compositions. For example, PC(34:1) will be associated to C16:0 and C18:1. Only use for datasets of mammalian origin"
                                                ), 
                                                br(),
                                                popify(placement = "right", title = "Info", options=list(container="body"),
@@ -56,7 +64,7 @@ fluidPage(theme = shinytheme("journal"),
                                                    status = 'primary',
                                                    right = TRUE
                                                  ),
-                                                 content = "Names of lipids that could not be matched to LION are automatically send to the LION-team. This will help us to improve the coverage of the database. User information and associated data will NOT be sent."
+                                                 content = "Names of lipids that cannot be matched to LION are automatically send to the LION-team. This will help us to improve the coverage of the database. User information and associated data will NOT be sent."
                                                ), 
                                                br(),
                                                popify(placement = "right", title = "Info", options=list(container="body"),
@@ -89,7 +97,7 @@ fluidPage(theme = shinytheme("journal"),
                                                                                        accept = c("text/csv",
                                                                                                   "text/comma-separated-values,text/plain",
                                                                                                   ".csv") ),
-                                                                             content = 'Format your dataset as comma seperated value files (.csv), with the first row reserved for metabolites and the other columns for numeric data (containing decimal points). Use double column headers; with row 1 containing condition identifiers and row 2 containing sample identifiers. Submit at least duplicates per condition. Dataset should be normalized before submission. Download a dataset below for an example.'
+                                                                             content = 'Format your dataset as comma seperated value files (.csv), with the first column reserved for metabolites and the other columns for numeric data (containing decimal points). Use double column headers; with row 1 containing condition identifiers and row 2 containing sample identifiers. Submit at least duplicates per condition. Dataset should be normalized before submission. Download a dataset below for an example.'
                                                                       
                                                                     )),
                                                                     column(offset=0, width = 1,style = "margin-top: 5px;",align="center",
@@ -98,7 +106,6 @@ fluidPage(theme = shinytheme("journal"),
                                                                            content = 'Format lipids in LIPIDMAPS notation style: a class-prefix followed by (summed) fatty acid(s) surrounded by parentheses. Examples are: PC(32:1); PE(18:1/16:0); SM(d18:1/18:0); TAG(54:2); etc. Check www.lipidmaps.org for more examples. LION will try to reformat alternative notation styles into LIPIDMAPS format.'))),
                                                                     
                                                                     downloadLink("examplePre1", "example set 1 (organelle fractions, adapted from Andreyev AY et al, 2010)"),
-                                                                    
                                                                     br(),
                                                                     downloadLink("examplePre2", "example set 2 (CHO-k1 incubated with several FFAs)"),
                                                                     br(),
@@ -129,7 +136,8 @@ fluidPage(theme = shinytheme("journal"),
                                                                                                                        "from high to low" = "descending")),
                                                                                                       radioButtons("ks_sided", "alternative hypothesis",
                                                                                                                      c("one-tailed (ECDF is higher)" = "ks",
-                                                                                                                       "two-tailed" = "ks2"))
+                                                                                                                       "two-tailed" = "ks2")),
+                                                                                               uiOutput("KS2_UI")
                                                                                )
                                                                     ),
                                                                     fluidRow(
@@ -181,14 +189,14 @@ fluidPage(theme = shinytheme("journal"),
                                                  ), content = 'After clicking "submit", LION/web matches the input lipids to the LION-database. Only matched identifiers will be used in the enrichment analysis. Subsequently, LION/web calculates a score of every LION-term that is associated with the dataset, for both the hitlist as the background set. These scores are compared by Fisher-exact tests. A low p-value is returned when a certain LION-term is higher represented in the hitlist than one would expect by chance.')),
                                                br(),
                                                br(),
-                                               actionLink("exampleA1", "example 1 (plasma membrane vs ER fraction)*"),
+                                               actionLink("exampleA1", "example 1 (cluster 6 in Fig. 2A*)"),
                                                br(),
-                                               actionLink("exampleA2", "example 2 (mitochondrial fraction vs homogenate)*"),
+                                               actionLink("exampleA2", "example 2 (cluster 7 in Fig. 2A*)"),
                                                br(),
-                                               actionLink("exampleA3", "example 3 (stimulated vs non-stimulated ER fractions)*"),
+                                               actionLink("exampleA3", "example 3 (cluster 8 in Fig. 2A*)"),
                                                br(),
                                                br(),
-                                               "* adapted from Andreyev AY, et al., 2010"
+                                               "* from Molenaar MR, et al., 2019"
                                                ),
                                       tabPanel("Contact", 
                                                br(),
@@ -235,18 +243,20 @@ fluidPage(theme = shinytheme("journal"),
                                    br(),
                                    br(),
                                    p("Biochemistry & Cell Biology, Universiteit Utrecht, The Netherlands"),
-                                   'LION/web v. 2019.10.01',
+                                   'LION/web v. 2019.11.26',
                                    br(),
                                    
                                    br(),
+                                  
                                    br()
                                    
                                    ),
                           tabPanel("LION input", 
                                    br(),
-                                   em(   textOutput("mapping_percentage")  ),
+                                   #em(   
+                                   htmlOutput("mapping_percentage"),    #textOutput("mapping_percentage")  ),
                                    br(),
-                                   tableOutput("value"),
+                                   formattableOutput("value"), 
                                    uiOutput("downloadInputCNTRL"),
                                    
                                    br()

@@ -1,22 +1,29 @@
-options(stringsAsFactors = FALSE,shiny.sanitize.errors = TRUE)
+options(stringsAsFactors = FALSE,shiny.sanitize.errors = F)
 
- 
 ## examples
 
+cluster_example <- read.csv(file = "data/clusters_lipids.csv")
 PM <- read.csv(file = "data/PM-ER_pvalues.csv")
 MT <- read.csv(file = "data/Mito-pvalues.csv")
 ER <- read.csv(file = "data/ER_KLA-ER_CON_pvalues.csv")
 
-backgroundlist_example <- paste(MT$lipids, "\n", collapse = '', sep = "")
-sublist_example1 <- paste(PM$lipids[PM$pvalues < 0.20], "\n", collapse = '', sep = "")
-sublist_example2 <- paste(MT$lipids[MT$pvalues < 0.20], "\n", collapse = '', sep = "")
-sublist_example3 <- paste(ER$lipids[ER$pvalues < 0.20], "\n", collapse = '', sep = "")
+LIONterms_rules <- read.csv(file = 'data/20191008 LIONterms_rules.csv', header = T)
+LIONterms_rules$RULE1[LIONterms_rules$RULE1 == ""] <- "-"
+LIONterms_FAs <- read.csv(file = 'data/20191008 LIONterms_FAs.csv', header = T)
+
+backgroundlist_example <- paste(cluster_example$lipids, "\n", collapse = '', sep = "")
+
+sublist_example1 <- paste(cluster_example$lipids[cluster_example$cluster == 6], "\n", collapse = '', sep = "")
+sublist_example2 <- paste(cluster_example$lipids[cluster_example$cluster == 7], "\n", collapse = '', sep = "")
+sublist_example3 <- paste(cluster_example$lipids[cluster_example$cluster == 8], "\n", collapse = '', sep = "")
 
 pvalueExample1 <-  paste( paste(PM$lipids, "\t", PM$pvalues, sep = ""),    "\n",    collapse = '',    sep = ""  )
 pvalueExample2 <-  paste( paste(MT$lipids, "\t", MT$pvalues, sep = ""),    "\n",    collapse = '',    sep = ""  )
 pvalueExample3 <-  paste( paste(ER$lipids, "\t", ER$pvalues, sep = ""),    "\n",    collapse = '',    sep = ""  )
 
-source(file  = "data/20190704 LION_tree_structure.R")
+FA_composition_table <- read.csv(file = 'data/FA_composition_table.csv')
+
+source(file  = "data/20191010 LION_tree_structure.R")
 
 #### libraries
 
@@ -30,6 +37,7 @@ library(shinyTree)
 library(shinyWidgets)
 library(shinyBS)
 library(httr)
+library(formattable)
 
 
 ## loading lipid ontology data
@@ -39,405 +47,16 @@ require('topOnto.LION.db')
 topOnto::initONT('LION')
 
 
-
 associationFile  <-  "data/20190704 LION_association.txt"
 
 
-## define functions
-
-convertLipidNames <- function(name){
-  
-  options(stringsAsFactors = FALSE)
-  
-  sapply(name, function(input) {
-    processed_input <- input
-    if (processed_input==""){processed_input <- " "}
-    
-    #aliases 
-    {
-      processed_input <- gsub("DAG|diacylglycerol","DG",processed_input)
-      processed_input <- gsub("TAG|triacylglycerol","TG",processed_input)
-      
-      processed_input <- gsub("GPA","PA",processed_input)
-      processed_input <- gsub("GPEtn|phosphatidylethanolamine|Phosphatidylethanolamine","PE",processed_input)
-      processed_input <- gsub("GPCho|phosphatidylcholine|Phosphatidylcholine","PC",processed_input)
-      processed_input <- gsub("GPSer|phosphatidylserine|Phosphatidylserine","PS",processed_input)
-      processed_input <- gsub("GPIns|phosphatidylinositol|Phosphatidylinositol","PI",processed_input)
-      processed_input <- gsub("GPGro|phosphatidylglycerol|Phosphatidylglycerol","PG",processed_input)
-      
-      
-      processed_input <- gsub("LBPA","BMP",processed_input)
-      processed_input <- gsub("lyso|Lyso","L",processed_input)
-      
-      processed_input <- gsub("^FA","FFA",processed_input)
-      processed_input <- gsub("ChE|CholE","CE",processed_input)
-      
-      processed_input <- gsub("\\Q(3'-sulfo)Galβ-Cer\\E|\\Q(3'-sulfo)GalCer\\E|Sulfogalactosyl ceramide[ ]*|[Ss]+(Gal|Hex)Cer|Sulfatide",
-                              "SHexCer",processed_input)
-      
-      
-      processed_input <- gsub("LacCer","Hex2Cer",processed_input)
-      processed_input <- gsub("Gl[u]*c[β-]*Cer|Gal[β-]*Cer|GluCer","HexCer",processed_input)
-    }    ### end aliases
-    
-    ### special cases:  'DG(0:0/18:1/16:0)' >> DG(18:1/16:0)
-    if(grepl('DG',processed_input) & grepl('\\D0:0',processed_input)){
-      processed_input <- gsub('/0:0',"",processed_input)
-      processed_input <- gsub('0:0/',"",processed_input)
-      
-    }
-    
-    ### end special cases
-    if(grepl("\\d+:\\d+;\\d+",processed_input) & !grepl("\\d+:\\d+;\\d+:\\d+",processed_input)){    ### 32:1;1 format >> 32:1
-      processed_input <- gsub(";\\d+","",processed_input)
-    }
-    ###############    
-    if(grepl("\\d+:\\d+:\\d+",processed_input)){    ### 32:1;1 format >> 32:1
-      #processed_input <- gsub(";\\d+","",processed_input)
-      parts <- unlist(strsplit(x = paste("_",processed_input,"_",sep=""), split = "\\d+:\\d+:\\d+"))
-      specialFAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+:\\d+", processed_input)))
-      specialFAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+", processed_input)))
-      processed_input[seq(from = 1, to = length(parts)*2, by = 2)] <- parts
-      processed_input[seq(from = 2, to = length(specialFAs)*2, by = 2)] <- specialFAs
-      processed_input <- gsub("^_|_$","",paste(processed_input, collapse = ""))
-      
-    }
-    
-    ###  >> remove (FA 16:0), not intensively tested
-    processed_input <- gsub("\\(FA( )*", "(",processed_input)   
-    
-    ### 'CL(32:0)(34:1)' or 'TAG 32:0(FA 16:0)' >> sum FAs between (), not intensively tested
-    FAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+", processed_input)))
-    if(length(FAs)>0){
-      FAs <- FAs[sapply(regmatches(FAs, gregexpr("\\d+", FAs)), function(i){  as.numeric(i)[1] > as.numeric(i)[2]  })]  ## C should be higher than DB  
-    }
-    if((grepl("CL", processed_input ) & (length(FAs) == 2 | length(FAs) == 3)) |
-       (grepl("TAG|TG", processed_input ) & (length(FAs) == 2)))     {
-      parts <- unlist(regmatches(processed_input, gregexpr("[\\(]*\\d+:\\d+[\\)]*", processed_input)) )
-      prefix <- unlist(strsplit(processed_input, "[\\(]*\\d+:\\d+[\\)]*"))[1]
-      suffix <- unlist(strsplit(processed_input, "[\\(]*\\d+:\\d+[\\)]*"))[2]
-      processed_input <- paste(prefix, "(",
-                               sum(sapply(regmatches(
-                                 parts, gregexpr("\\d+", parts)
-                               ), function(i) {
-                                 as.numeric(i)[1]
-                               })), ## number of Cs
-                               ":",
-                               sum(sapply(regmatches(
-                                 parts, gregexpr("\\d+", parts)
-                               ), function(i) {
-                                 as.numeric(i)[2]
-                               })), ## number of DBs
-                               ")", suffix, sep = "")
-    }
-    ### end 'CL(32:0)(34:1)'
-    
-    
-    if(length(FAs)==2 & grepl("^SM",    processed_input)){                ### voor 'SM 18/16:0)'
-      if(!grepl("[dt]\\d+",processed_input)){                             ### double check: no 'd'18...?
-        processed_input <- gsub("SM 18","SM d18",processed_input)         ### add 'd'
-        processed_input <- gsub("SM\\(18","SM(d18",processed_input)
-      }
-      
-    }
-    
-    processed_input <- gsub("_\\d*\\.*\\d*/\\d*\\.*\\d*", "",processed_input)   ## remove amu/RT info
-    
-    processed_input <- gsub(";\\d$","",processed_input)   ### in case of SHexCer 30:2;1
-    
-    if (grepl("DHHexosylceramide|Hexosylceramide|DHSphingomyelin|Sphingomyelin|DHCeramide|Ceramide", processed_input)){   ## for notation 'DHSphingomyelin 16'
-      if (grepl("C\\d+",processed_input)){   ## replace 'C20:3 to 20:3
-        C_containing_notation <- unlist(regmatches(processed_input,  gregexpr("C\\d+", processed_input)))
-        processed_input <- sub(C_containing_notation,  gsub('C',"",C_containing_notation), processed_input)
-      }
-      
-      if (!grepl("\\d+:\\d+",processed_input)){   ## replace 'C16 to 16:0
-        C_number <- regmatches(processed_input, regexpr("\\d+", processed_input)) 
-        processed_input <- sub(C_number, paste(C_number,":0",sep=""), processed_input)
-      }
-      
-      if (grepl("^DH",processed_input)){   ## DH >> d18:0, otherwise >> d18:1
-        processed_input <- gsub("DH","",processed_input)
-        FAs <- regmatches(processed_input, regexpr("\\d+.*\\d*", processed_input)) 
-        processed_input <-  sub(FAs, paste("d18:0/",FAs,sep=""), processed_input)
-      } else {
-        #processed_input <- gsub("DH","",processed_input)
-        FAs <- regmatches(processed_input, regexpr("\\d+.*\\d*", processed_input)) 
-        processed_input <-  sub(FAs, paste("d18:1/",FAs,sep=""), processed_input)
-      }
-      
-      processed_input <- gsub("Hexosylceramide","HexCer",processed_input)
-      processed_input <- gsub("Sphingomyelin","SM",processed_input)
-      processed_input <- gsub("Ceramide","Cer",processed_input)
-    }
-    
-    processed_input <-
-      gsub("_|;", "/", processed_input)                                ## _ and ; into /
-    
-    for(substitute in unlist(regmatches(processed_input, gregexpr("\\d+-\\d+", processed_input)) )){
-      processed_input <- gsub(substitute, gsub("-","/",substitute), processed_input) 
-    }   ## - into / if it's between numbers
-    
-    
-    processed_input <-
-      gsub("\\((\\d+[EZ]{1},*)+\\)", "", processed_input)   ## removing (5Z,8Z,11Z,14Z)-like info
-    
-    if (grepl("\\d+:\\d+[pe]{1}", processed_input)){             ### ether lipids: in case of 18:1p in stead of P-18:1
-      
-      ether_FAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+[pe]{1}", processed_input)))  ## extract 18:1
-      
-      for(i in 1:length(ether_FAs)){
-        processed_input <-
-          gsub(ether_FAs[i],              ## replace 18:1p for P-18:1
-               paste(
-                 ifelse(grepl("p", ether_FAs[i]), "P-", "O-"),
-                 regmatches(ether_FAs[i], regexpr("\\d+:\\d+", ether_FAs[i])),
-                 sep = ""
-               ),
-               processed_input)
-      }
-    }
-    
-    if (!grepl("\\(", processed_input)) {
-      ## if they don't contain /
-      ## process PC 18:1/20:4 format to PC(..)
-      
-      middlePart <-         ### ..O-18:1/16:0
-        regmatches(processed_input,
-                   regexpr("[dtAOP-]*(\\d+:\\d+/*)+", processed_input))
-      otherParts <-         ## SM
-        unlist(strsplit(processed_input, "[dtAOP-]*(\\d+:\\d+/*)+"))
-      otherParts <- gsub(" ", "", otherParts)
-      text <- ""
-      
-      for (i in 1:max(c(length(otherParts),   length(middlePart)))) {
-        ## reconstruct
-        if (!is.na(otherParts[i])) {
-          text <- paste(text, otherParts[i], sep = "")
-        }
-        
-        if (!is.na(middlePart[i])) {
-          text <- paste(text, "(", middlePart[i], ")", sep = "")
-        }
-      }
-      processed_input <- text
-    }
-    
-    
-    if(grepl("-DiHex",processed_input)){          # in case of d18:0/12:0-DiHex
-      processed_input <- gsub("-DiHex","",processed_input)
-      processed_input <- paste("Hex2Cer",processed_input,sep="")
-    }
-    
-    if(grepl("-MonoHex",processed_input)){          # in case of d18:2/26:0-MonoHex
-      processed_input <- gsub("-MonoHex","",processed_input)
-      processed_input <- paste("HexCer",processed_input,sep="")
-    }
-    
-    if(grepl("\\D+ [\\(|\\d+]", processed_input)){        ## in case of 'CL (70:2)'
-      processed_input <- gsub("\\D+ [\\(|\\d+]", 
-                              gsub(" ","", regmatches(processed_input, regexpr("\\D+ [\\(|\\d+]", processed_input)) ),
-                              processed_input)
-    }
-    
-    if (grepl("^LP.*\\((\\d+:\\d+/*)+", processed_input)) {
-      ## if LPC format >> format to PC(xx:0:0)
-      
-      
-      middlePart <-         ### ..18:1 + /0:0
-        paste(regmatches(
-          processed_input,
-          #regexpr("(\\d+:\\d+/*)+", processed_input)
-          regexpr("([OP-]*\\d+:\\d+[ep/]*)+", processed_input)
-        ), sep = "")
-      
-      if(identical(middlePart,character(0))){middlePart <- ""}
-      ### if no 0:0 yet, add this
-      if(!grepl("\\D0:0|^0:0", middlePart)){middlePart <- paste(middlePart,"/0:0",sep="")}
-      
-      
-      otherParts <-         ## LPC
-        unlist(strsplit(processed_input, "([OP-]*\\d+:\\d+[ep/]*)+"))
-      otherParts <- gsub("L", "", otherParts)
-      if(identical(otherParts,character(0))){otherParts <- ""}
-      
-      text <- ""
-      
-      for (i in 1:max(c(length(otherParts),   length(middlePart)))) {
-        ## reconstruct
-        if (!is.na(otherParts[i])) {
-          text <- paste(text, otherParts[i], sep = "")
-        }
-        
-        if (!is.na(middlePart[i])) {
-          text <- paste(text, middlePart[i], sep = "")
-        }
-      }
-      processed_input <- text
-      
-      
-    }
-    
-    
-    if(grepl('^P\\D\\(A-*',processed_input) ){      ########## ether lipids 20180605
-      processed_input <- gsub('\\(A-*',"(O-",processed_input)    ##gsub('A-*',"(O-",processed_input)
-    }
-    if(grepl('^P\\D\\([OP]\\d+',processed_input) ){      ########## ether lipids 20180219
-      processed_input <- gsub('\\(O',"(O-",processed_input)
-      processed_input <- gsub('\\(P',"(P-",processed_input)
-    }
-    
-    if(grepl("[[:upper:]]{1}[[:lower:]]{2}.+(sterol|enone)", processed_input)){         ### in case of Lanosterol / Cholestenone
-      UpperLower <- regmatches(processed_input, regexpr("[[:upper:]]{1}[[:lower:]]{2}", processed_input)) 
-      processed_input <- gsub("[[:upper:]]{1}[[:lower:]]{2}", tolower(UpperLower),processed_input )
-    }
-    
-    
-    ## reorder FAs
-    if (         
-      (length(unlist(regmatches(processed_input, gregexpr("\\d+:\\d+",        processed_input)))) > 1) &                         ## when more than 1 FA)
-      (length(unlist(regmatches(processed_input, gregexpr("[dtm](\\d+:\\d+)|[PO]-(\\d+:\\d+)", processed_input)))) < 1) 
-      #  (!grepl("0:0", processed_input))                           ## unless it's containing a 0:0 FA (=lyso, should be on second position))
-    ){  
-      FAs <- t(as.data.frame(strsplit(unlist(
-        regmatches(
-          processed_input,
-          gregexpr("\\d+:\\d+", processed_input)
-        )
-      ), ":")))
-      FAs <- as.data.frame(sapply(as.data.frame(FAs), as.numeric))
-      
-      ## added to sort lysoPCs
-      FAs[apply(FAs,1,function(i){paste(i, collapse = ":")}) == "0:0",1] <- 999  ## set 0:0 to 999:0 to order right
-      
-      FAs <- FAs[order(FAs$V1, FAs$V2), ]
-      ## added to sort lysoPCs
-      FAs[apply(FAs,1,function(i){paste(i, collapse = ":")}) == "999:0",1] <- 0  ## reset 
-      
-      FAs <- apply(FAs, 1, function(row) {
-        paste(row[1], ":", row[2], sep = "")
-      })
-      
-      parts <- unlist(strsplit(processed_input, "\\d+:\\d+"))
-      text <- ""
-      
-      for (i in 1:length(parts)) {
-        if (!is.na(parts[i])) {
-          text <- paste(text, parts[i], sep = "")
-        }
-        
-        if (!is.na(FAs[i])) {
-          text <- paste(text, FAs[i], sep = "")
-        }
-      }
-      text
-    } else {
-      processed_input
-    }
-    
-  })
-  
-  
-  
-}       ## 20190909  
-
-simplifyLipidnames <- function(name){
-  options(stringsAsFactors = FALSE)
-  
-  sapply(name, function(input) {
-    processed_input <- input
-    
-    to_simplify <-
-      unlist(regmatches(processed_input,    gregexpr("[dt]*\\d+:\\d+([/_]+\\d+:\\d+)+", processed_input)    ))
-    to_simplify <- to_simplify[!grepl("^0:0|[_/]+0:0",to_simplify)]
-    
-    if (length(to_simplify) > 0) {
-      simplified <-  sapply(to_simplify, function(part_i) {
-        FAs <- unlist(regmatches(part_i,  gregexpr("\\d+:\\d+", part_i)))
-        Cs <-  sum(sapply(strsplit(FAs, split = ":"), function(i) {  as.numeric(i[1])     }))
-        DBs <- sum(sapply(strsplit(FAs, split = ":"), function(i) {  as.numeric(i[2])  }))
-        paste(Cs, ":", DBs, sep = "")
-      })
-      
-      nameLUT <-
-        data.frame(original = paste('\\Q', to_simplify, '\\E', sep = ""),
-                   simplified = simplified)
-      
-      for (i in 1:dim(nameLUT)[1]) {
-        processed_input <-
-          gsub(nameLUT$original[i], nameLUT$simplified[i], processed_input)
-      }
-      
-      processed_input
-    } else {processed_input}
-  })
-  
-}   ### 20190916
-
-sendEmail <- function(subject = "LION/web usage", mail_message = "empty", from = "system"){
-  url <- "xxxx"
-  api_key <- "xxx"
-  the_body <-
-    list(
-      from="LION/web <xxx>",
-      to="xxx",
-      subject=subject,
-      text=paste(mail_message,"\n\n=====================\nfrom: ",from,"\n=====================\nLION/web: www.lipidontology.com", sep= "")
-    )
-  req <- httr::POST(url, httr::authenticate("api", api_key),  encode = "form",  body = the_body)
-  httr::stop_for_status(req)
-  TRUE
-}   ## mail function
-
-associatedTerms <- function(lipid, ontologyObject, all = FALSE, reformat = FALSE) {    ## function: which LION-terms are associated with a lipid?
-  if (!reformat) {
-    associations <- sapply(lipid, function(lipid_i) {
-      terms <-
-        ontologyObject@termName[names(ontologyObject@termName) %in% names(genesInTerm(ontologyObject))[sapply(genesInTerm(ontologyObject), function(term) {
-          any(term == lipid_i)
-        })]]   ## find terms
-      
-      if (!all) {
-        terms <- terms[grepl("LION", names(terms))]
-      }     ## is all == TRUE, than remove CAT and all  terms
-      return(terms)
-    })
-    return(associations)
-    
-  } else if (reformat) {
-    
-    terms <- names(genesInTerm(ontologyObject))
-    if (!all) {
-      terms <- terms[grepl("LION", terms)]
-    }     ## is all == TRUE, than remove CAT and all  terms
-    
-    lipid_term_table <- t(sapply(lipid, function(lipid_i) {
-      terms_per_lipid <-
-        names(ontologyObject@termName[names(ontologyObject@termName) %in% names(genesInTerm(ontologyObject))[sapply(genesInTerm(ontologyObject), function(term) {
-          any(term == lipid_i)
-        })]])
-      return(ifelse(terms %in% terms_per_lipid, "x", ""))
-    }))
-    
-    names <- ontologyObject@termName[match(terms, names(ontologyObject@termName))]
-    
-    lipid_term_table <- rbind(terms, names, lipid_term_table)
-    lipid_term_table <- cbind(rownames(lipid_term_table), lipid_term_table)
-    rownames(lipid_term_table) <- NULL
-    colnames(lipid_term_table) <- NULL
-    lipid_term_table <- as.data.frame(lipid_term_table)
-    lipid_term_table[[1]][1:2] <- c("LION-term", "LION-name")
-    return(lipid_term_table)
-  }
-  
-} ## which LION-terms are associated with a lipid?
-
+## load define functions
+source('data/20191008 LIONweb functions.R')
 
 
 ## read associations
 lipidID2TERM <- readMappings(file = associationFile)   ## topOnto function, but removes spaces
-### also add IDs as annotation, so that people can use LION:xxxxx as input
-lipidID2TERM <- c(lipidID2TERM,sapply(unique(unlist(lipidID2TERM)), function(ID){ID}, simplify = FALSE))
+
 
 # Define server logic for random distribution application
 function(input, output, session) {
@@ -489,13 +108,18 @@ function(input, output, session) {
         errors <-
           c(errors, "ERROR: One or more samples names are not unique")
       }
+      if (sum(apply(df[-1,-c(1:2)],1,function(row){all(row == 0)})) > 0) {
+        errors <-
+          c(errors, "ERROR: Dataset contains rows with only zeros")
+      }
     }
     errors <- paste(errors, collapse = "<br>")
     
     ## end error handling
     
     
-    if(!(is.null(errors))){
+    #if(!(is.null(errors))){
+    if(errors==""){
       input_data <- list(df = df,
          matrix = sapply(df[-c(1,2),-1], as.numeric),
          conditions = unique(as.character(df[1,-1])),
@@ -537,6 +161,25 @@ function(input, output, session) {
                  input_data$errors,
                  "</font>",sep=""))
     }
+    
+  })
+  
+  output$KS2_UI<- renderUI({
+    
+    if(input$ks_sided == "ks2"){
+      
+      fluidRow(
+        column(width = 1),
+        column(width = 11,
+               selectizeInput("split_direction_in_output", 
+                              label = NULL, 
+                              choices = c("Separate up- and downregulated terms in figure" = "split", 
+                                          "Mix up- and downregulated terms in figure" = "combine"), selected = "split"))
+      )
+      
+    }
+    
+    
     
   })
   
@@ -824,19 +467,16 @@ function(input, output, session) {
   observe({
     input$download_network_bs  
       visNetworkProxy("ontology.plot") %>% visGetPositions()   
-      #if(!is.null(input$ontology.plot_positions)){
-      #  print( do.call(rbind, input$ontology.plot_positions))
-      #}  
   })
   
   observeEvent(input$exampleB1, {
-     updateTextAreaInput(session, "listwPvalues",  value = pvalueExample1)
+    updateTextAreaInput(session, "listwPvalues",  value = pvalueExample1)
   })
   observeEvent(input$exampleB2, {
-      updateTextAreaInput(session, "listwPvalues",  value = pvalueExample2)
+    updateTextAreaInput(session, "listwPvalues",  value = pvalueExample2)
   })
   observeEvent(input$exampleB3, {
-       updateTextAreaInput(session, "listwPvalues",  value = pvalueExample3)
+    updateTextAreaInput(session, "listwPvalues",  value = pvalueExample3)
   })
   observeEvent(input$plot_click, {           ### display term info in console
     termInfo <- dataBlock()$to_ggplot_display$data
@@ -895,12 +535,14 @@ function(input, output, session) {
     
     input_listwPvalues <- isolate(input$listwPvalues)
     
+    
     ### some lipids contain comma's, so only the last comma should be regarded as a separator
     numericPattern <- unlist(regmatches(input_listwPvalues, gregexpr(", *(\\d|\\.)+(\n|$)", input_listwPvalues)) )   ## extract patterns to replace last comma
     
     for(p in numericPattern){            ### replace last comma of line to \t; this will be the seperator
       input_listwPvalues <- gsub(p, gsub(",", "\t", p), input_listwPvalues)
     }
+    
     
     
     ####  is input appropriate??
@@ -941,9 +583,34 @@ function(input, output, session) {
       if (isolate(input$method) == "Target-list mode") {
       if ((is.null(isolate(input$sublist)) ||
            isolate(input$sublist) == "") == FALSE) {
-        lipidExistance <-
-          data.frame(input = unique(c(unlist(strsplit(isolate(input$sublist), "\n")),  unlist(strsplit(isolate(input$background), "\n"))))  )
-        lipidExistance$'simplified input' <- convertLipidNames(lipidExistance$input)
+        
+        ### new 20191010
+        cat("substracting input target-list \n")
+        
+        sublist <- strsplit(isolate(input$sublist), "\n"); names(sublist) <- "ID"
+        background <- strsplit(isolate(input$background), "\n"); names(background) <- "ID"
+        
+        background = data.frame(ID = c(background$ID, sublist$ID[!sublist$ID %in% background$ID]))
+        background$IDnr <-  1:length(background$ID)
+        background$input <- paste(sprintf("[#%04d]", background$IDnr),background$ID)
+        
+        sublist$input <-
+          do.call("rbind",
+                  sapply(unique(sublist$ID), function(ID_i){
+                    background[background$ID == ID_i,]
+                  }, simplify = FALSE))$input
+        
+        background$input <-
+          do.call("rbind",
+                  sapply(unique(background$ID), function(ID_i){
+                    background[background$ID == ID_i,]
+                  }, simplify = FALSE))$input
+        
+        
+        lipidExistance <-  data.frame(input = background$input )
+        cat("converting input target-list \n")
+        lipidExistance$'simplified input' <- convertLipidNames(gsub("^\\[#\\d+\\] ","",lipidExistance$input))
+        ### end new 20191010
         
         
       } else {
@@ -952,16 +619,19 @@ function(input, output, session) {
       
     }
     
-      if (isolate(input$sub_method) == "(ii) analysis") {
+      if (isolate(input$method) == "Ranking mode") {                  ## (isolate(input$sub_method) == "(ii) analysis") {
       if ((is.null(input_listwPvalues) ||
            input_listwPvalues == "") == FALSE) {
-
+        
+        
         pValueList <- list()
         
         pValueList$input <-
           transpose(strsplit(unlist(strsplit(
             input_listwPvalues, "\n"
           )), "[\t\\|]"))[[1]]
+        
+        pValueList$input <- paste(sprintf("[#%04d]", 1:length(pValueList$input)),pValueList$input)
         
         pValueList$pvalues <-
           transpose(strsplit(unlist(strsplit(
@@ -976,7 +646,8 @@ function(input, output, session) {
   
         pValueList <- as.data.frame(pValueList)
         lipidExistance <- data.frame(input = pValueList$input)
-        lipidExistance$'simplified input' <- convertLipidNames(lipidExistance$input)
+        
+        lipidExistance$'simplified input' <- convertLipidNames(gsub("^\\[#\\d+\\] ","",lipidExistance$input))
         
         
       } else {
@@ -987,56 +658,183 @@ function(input, output, session) {
       
     } else {
       
-      lipidExistance$'LION ID' <-  unlist(lipidID2TERM)[match(lipidExistance$'simplified input',names(lipidID2TERM))]
-      
-      lipidExistance <-
-      do.call("rbind",
-      apply(lipidExistance, 1, function(input_row_i){
-          simplified_input <- input_row_i[2]
-          ID_i <- unlist(lipidID2TERM[which(names(lipidID2TERM) %in% simplified_input)])
-          if(length(ID_i)<1 & isolate(input$SmartMatching)){         ### if 'smartmatching' is on, simplify lipidnames
-            ID_i <- unlist(lipidID2TERM[which(names(lipidID2TERM) %in% simplifyLipidnames(simplified_input))])
-          } 
-          if(length(ID_i)<1){
-            ID_i <- NA
-          } 
+      ##### new 20191106
+      lipidExistance_list <-
+        lapply(1:dim(lipidExistance)[1], function(row_i) {
           
-          LION_name_i <- unlist(names(lipidID2TERM)[which(names(lipidID2TERM) %in% simplified_input)])
+          lipid_i <- lipidExistance[row_i, 2]   ## lipid_i is lipid of this iteration
           
-          if(length(LION_name_i)<1 & isolate(input$SmartMatching)){       ### if 'smartmatching' is on, simplify lipidnames
-            LION_name_i <- unlist(names(lipidID2TERM)[which(names(lipidID2TERM) %in% simplifyLipidnames(simplified_input))])
+          LION_ID <-
+            unlist(lipidID2TERM[lipid_i == names(lipidID2TERM)])
+          
+          if (is.null(LION_ID)) {
+            ### if input is LION:xxxx
+            LION_ID <-
+              unlist(lipidID2TERM[lipid_i == unlist(lipidID2TERM)])
+            LION_ID <-
+              LION_ID[!grepl("^SLM:|^LM..\\d+", names(LION_ID))]   ## remove SwissLipids/LIPIDMAPS IDs
           }
-          if(length(LION_name_i)<1){
-            LION_name_i <- NA
+          
+          if (!is.null(LION_ID)) {
+            output_df <-
+              data.frame(
+                input = lipidExistance[row_i, 1],
+                'simplified input' = lipid_i,
+                name = names(LION_ID),
+                LION = LION_ID,
+                match = "direct"
+              )
+          } else {
+            ### no direct matching is found
+            if (isolate(input$SmartMatching)) {
+              ### 'smartmatching' is on
+              lipid_index <-
+                list(
+                  generalized = simplifyLipidnames(lipid_i),
+                  headgroup = getLipidHeadgroup(lipid_i),
+                  linkage = getLipidLinkage(lipid_i),
+                  FAs = getFAs(lipid_i)
+                )
+              
+              generalized_LION_ID <-
+                unlist(lipidID2TERM[lipid_index$generalized == names(lipidID2TERM)])
+              if (!is.null(generalized_LION_ID)) {
+                terms <-
+                  data.frame(name = names(lipidID2TERM)[lipid_index$generalized == names(lipidID2TERM)],
+                             LION = generalized_LION_ID)
+              } else {
+                ## no generalized lipid found
+                LIONterms_rules_i <-
+                  LIONterms_rules[lipid_index$headgroup == LIONterms_rules$RULE1 ,]
+                
+                if (all(LIONterms_rules_i$RULE2 == "")) {
+                  terms <- LIONterms_rules_i[, 1:2]
+                } else {
+                  terms <-
+                    LIONterms_rules_i[lipid_index$linkage == LIONterms_rules_i$RULE2,][, 1:2]
+                }
+              }
+              
+              
+              terms <-
+                rbind(terms, LIONterms_FAs[LIONterms_FAs$name %in% lipid_index$FAs,])
+              if (dim(terms)[1] > 0) {
+                output_df <-
+                  data.frame(input = lipidExistance[row_i, 1],
+                             'simplified input' = lipid_i,
+                             terms,
+                             match = "smart matching")
+                
+              } else {
+                ## no match by smart matching
+                output_df <-
+                  data.frame(
+                    input = lipidExistance[row_i, 1],
+                    'simplified input' = lipid_i,
+                    name = "not found",
+                    LION = "not found",
+                    match = ""
+                  )
+              }
+              
+              
+            } else {
+              ### 'smartmatching' is off, and no match found
+              output_df <-
+                data.frame(
+                  input = lipidExistance[row_i, 1],
+                  'simplified input' = lipid_i,
+                  name = "not found",
+                  LION = "not found",
+                  match = ""
+                )
+            }
+            
+            
           }
+          if(isolate(input$FAprediction)){    ## predict FAs if nescerrary
+            
+            lipid_index <-
+              list(
+                generalized = simplifyLipidnames(lipid_i),
+                headgroup = getLipidHeadgroup(lipid_i),
+                FAs = getFAs(lipid_i)
+              )
+            
+            if(lipid_index$generalized == lipid_i &   length(lipid_index$FAs) == 1){   ## is FA prediction applicable?
+              
+              predicted_FAs <- predict_FAs(headgroup = lipid_index$headgroup, 
+                                           summedFA = gsub("C","",lipid_index$FAs), 
+                                           composition_table = FA_composition_table )
+              
+              if(dim(LIONterms_FAs[LIONterms_FAs$name %in% predicted_FAs,])[1]>0){    ## any result?
+                output_df <-
+                  rbind(output_df,
+                        data.frame(input = lipidExistance[row_i, 1],
+                                   'simplified input' = lipid_i,
+                                   LIONterms_FAs[LIONterms_FAs$name %in% predicted_FAs,],
+                                   match = "FA-prediction"))
+              } 
+              
+              
+            }
+            
+            
+          }
+          
+          return(output_df)
+        })
       
-          data.frame(input = input_row_i[1],
-                   'simplified input' = simplified_input,
-                   'LION ID' = ID_i,
-                   'LION name' = LION_name_i)
-        
-      }))
-      colnames(lipidExistance) <- c('input','simplified input','LION ID','LION name')
+      matching_statistics <- data.frame(total = length(sapply(lipidExistance_list, function(lipid_i){!any(lipid_i$LION == "not found")})),
+                                        matched = sum(sapply(lipidExistance_list, function(lipid_i){!any(lipid_i$LION == "not found")})),
+                                        percent = mean(sapply(lipidExistance_list, function(lipid_i){!any(lipid_i$LION == "not found")})    ) * 100)
       
-      lipidExistance$'LION ID'[is.na(lipidExistance$'LION ID')] <- "not found"
       
-    
-      ## LION:IDs added to association table >> results in two matches, take first for now
-      lipidExistance$'LION name' <- sapply(lipidExistance$'LION ID', function(ID){     ### look for LIONname
-        output <- names(lipidID2TERM)[lipidID2TERM == ID]
-        if(identical(output, character(0))){output <- "not found"}
-        output[!grepl("^SLM:|^LM..\\d+",output )] [1]                 ## don't return names like LMGP04010883 or SLM:000042385
-      })
+      lipidExistance <- do.call("rbind",lipidExistance_list)
+     
+      colnames(lipidExistance) <- c('input','simplified input','LION name','LION ID', "match")
+      
+      # lipidExistance_toview <-
+      #   do.call("rbind", lapply(lipidExistance_list, function(lipidExistance_i) {
+      #     data.frame(
+      #       input = unique(lipidExistance_i$input),
+      #       name = paste(lipidExistance_i$name, collapse = "<br>"),
+      #       LION = paste(lipidExistance_i$LION, collapse = "<br>")
+      #     )
+      #   }))
+      
+      color_df <- data.frame(match = c("direct","smart matching", "FA-prediction",""),
+                             color = c("#4f4d4d","#9c3c2d","#c4942b","#bdbbbf"))
+      
+      lipidExistance_toview <-
+        do.call("rbind", lapply(lipidExistance_list, function(lipidExistance_i) {
+          
+          color_pattern <- color_df$color[match(lipidExistance_i$match, color_df$match)]
+          
+          data.frame(
+            input = unique(lipidExistance_i$input),
+            name = paste("<font color='",color_pattern,"'>",lipidExistance_i$name,"</font>" , sep ="", collapse = "<br>"),
+            LION = paste("<font color='",color_pattern,"'>",lipidExistance_i$LION,"</font>" , sep ="",  collapse = "<br>")
+          )
+        }))
+      colnames(lipidExistance_toview) <- c('input','LION name','LION ID')
+      
+      
+      ##### end new 20191006
       
       lipidExistance$'simplified input' <- NULL        ## remove this column, not interesting for user
       
-      ## lipidExistance <- lipidExistance[order(lipidExistance$'LION ID'),]   ## reorder based on matching
       
       ## use matched lipids as assocation table 
-      matched_lipidID2TERM <- as.list(lipidExistance$`LION ID`)
-      names(matched_lipidID2TERM) <- lipidExistance$input
+    
+      lipidExistance_feasable <- lipidExistance[lipidExistance$`LION ID` != "not found",]
       
-      lipidExistance
+      matched_lipidID2TERM <- 
+        sapply(unique(lipidExistance_feasable$input), function(input){
+          lipidExistance_feasable$`LION ID`[lipidExistance_feasable$input == input]
+        }, simplify = FALSE)
+      
+      
     }
     
     })
@@ -1053,17 +851,19 @@ function(input, output, session) {
         if (isolate(input$method) == "Target-list mode") {
           if ((is.null(isolate(input$sublist)) ||
                isolate(input$sublist) == "") == FALSE) {
+            
+            
             lipidIDs <-
-              list(sublist = unlist(strsplit(isolate(input$sublist), "\n")), #convertLipidNames(  unlist(strsplit(isolate(input$sublist), "\n"))  ),
-                   backgroundlist =  unlist(strsplit(isolate(input$background), "\n"))    ##convertLipidNames(   unlist(strsplit(isolate(input$background), "\n"))  )
+              list(sublist =  sublist$input,                    #unlist(strsplit(isolate(input$sublist), "\n")),
+                   backgroundlist =   background$input          #unlist(strsplit(isolate(input$background), "\n"))   
                    )
             
             
             lipidIDlogical <-
-              factor(as.integer(lipidIDs$backgroundlist %in% lipidIDs$sublist))
+              factor(as.integer(lipidIDs$backgroundlist %in% lipidIDs$sublist), levels = c(0,1))
             names(lipidIDlogical) <- lipidIDs$backgroundlist
             
-            if(any(names(lipidID2TERM) %in% names(lipidIDlogical)) &
+            if( any(names(lipidIDlogical) %in% names(matched_lipidID2TERM)) &
                                    sum(lipidIDlogical=="1")  > 1  ){   ### can at least one lipid be matched?
               ONTdata <- new(
                 "topONTdata",
@@ -1082,7 +882,7 @@ function(input, output, session) {
                 ontology = "LION",
                 allGenes = lipidIDlogical,
                 annot = annFUN.gene2GO,
-                gene2GO = matched_lipidID2TERM)
+                gene2GO = lipidID2TERM)
             }
             
             
@@ -1090,6 +890,9 @@ function(input, output, session) {
               runTest(ONTdata,
                       algorithm = "classic",
                       statistic = "fisher")
+            
+          
+           
             to_display <-
               GenTable(ONTdata,
                        'p-value' = resultFis,
@@ -1124,9 +927,11 @@ function(input, output, session) {
                 DAG.env[[id]]
               })
               
+              lipidsInTerms <- genesInTerm(ONTdata)
+              
               TermContent <- 
               sapply(to_display$TERM.ID, function(id) {
-                genesInTerm(ONTdata)[[id]]
+                lipidsInTerms[[id]]
               })
               
               test_similarity <-
@@ -1211,16 +1016,11 @@ function(input, output, session) {
           }
         } ## end if "By target list"
         
-        if (isolate(input$sub_method) == "(ii) analysis") {
+        if (isolate(input$sub_method == "(ii) analysis" & input$method == "Ranking mode")) {
           if ((is.null(input_listwPvalues) ||
                input_listwPvalues == "") == FALSE) {
-            pValueList <- list()
-            ### seperate by tab or | >> comma gives problems with input: PC(18:1(3Z)/20:4(3Z,6Z,9Z,12Z))
             
-            #pValueList$input <-   convertLipidNames(  transpose(strsplit(unlist(strsplit(input_listwPvalues, "\n")), "[\t\\|]"))[[1]]  )
-            pValueList$input <-   transpose(strsplit(unlist(strsplit(input_listwPvalues, "\n")), "[\t\\|]"))[[1]] 
-            pValueList$pvalues <-   transpose(strsplit(unlist(strsplit(input_listwPvalues, "\n")), "[\t\\|]")) [[2]] 
-            pValueList <- as.data.frame(pValueList)
+            
             pValueList$pvalues <- as.numeric(pValueList$pvalues)
             
             lipidIDrank <- rank(pValueList$pvalues * direction)    ## direction by radiobutton input$ranking
@@ -1230,7 +1030,8 @@ function(input, output, session) {
               return(rep(TRUE, length(lipidIDrank)))
             }
             
-            if(any(names(lipidID2TERM) %in% names(lipidIDrank))){   ### can at least one lipid be matched?
+            
+            if(any(names(lipidIDrank) %in% names(matched_lipidID2TERM))){   ### can at least one lipid be matched?
               ONTdata <- new(
                 "topONTdata",
                 ontology = "LION",
@@ -1246,16 +1047,22 @@ function(input, output, session) {
                 ontology = "LION",
                 allGenes = lipidIDrank,
                 annot = annFUN.gene2GO,
-                gene2GO = matched_lipidID2TERM,
+                gene2GO = lipidID2TERM,
                 geneSelectionFun = mySel
               )
             }
             
             
+            
+           
             resultFis <-
               runTest(ONTdata,
                       algorithm = "classic",
-                      statistic = isolate(input$ks_sided))
+                      statistic = isolate(input$ks_sided))  #'ks' 'ks2)
+            
+            sign_i <- sign(resultFis@score)
+            resultFis@score <- abs(resultFis@score)
+            sign_i_df <- data.frame(LION = names(resultFis@score), sign = sign_i)
             
             incProgress(.7, detail = paste("enrichment statistics"))
             
@@ -1267,7 +1074,6 @@ function(input, output, session) {
             to_display <-
               to_display[grep("LION", to_display$TERM.ID), ]
             
-    
             
             LUT <- data.frame(ID = names(ONTdata@termName),
                               Discription = ONTdata@termName)
@@ -1275,6 +1081,8 @@ function(input, output, session) {
             to_display$Term <- LUT$Discription[match(to_display$TERM.ID, LUT$ID)]        ### otherwise, some names are abbrev.
             to_display <- to_display[to_display$Annotated > 2, ]        ### remove terms with 1 or 2 lipids
             
+            
+           
             ####  limiting by LION-term selection
             if(isolate(input$LIONselection)){    ### switch for LION-selection
               TermsOfInterest <- get_selected(isolate(input$tree), format = "names") 
@@ -1298,9 +1106,11 @@ function(input, output, session) {
                 DAG.env[[id]]
               })
               
+              lipidsInTerms <- genesInTerm(ONTdata)
+              
               TermContent <- 
                 sapply(to_display$TERM.ID, function(id) {
-                  genesInTerm(ONTdata)[[id]]
+                  lipidsInTerms[[id]]
                 })
               
               test_similarity <-
@@ -1381,6 +1191,15 @@ function(input, output, session) {
               )
             to_display <- to_display[, c(1, 2, 3, 6, 7)]
             
+            
+            if(!is.null(sign_i_df)){
+              to_display$Regulated <- as.character(factor(sign_i_df$sign[match(to_display$`Term ID`, sign_i_df$LION)], levels = c(1,-1), labels = c("UP","DOWN")))
+              if(all(to_display$Regulated == "UP")){
+                to_display$Regulated <- NULL
+              }
+            }
+            
+            
         
           } else {
             to_display <- data.frame()
@@ -1391,11 +1210,14 @@ function(input, output, session) {
         lengthOfTable <- length(to_display$"Term ID")
         
         ### make detailed table with lipids per term
+        
         to_display_detailed <- to_display
         
+        lipidsInTerms <- genesInTerm(ONTdata)
         
         identifiers <- lapply(to_display_detailed$'Term ID', function(ID){
-          genesInTerm(ONTdata)[[ID]]
+          lipidsInTerms[[ID]]
+          #genesInTerm(ONTdata)[[ID]]
         })
         
   ####  
@@ -1425,48 +1247,94 @@ function(input, output, session) {
         
         ### term associations report
         
-        lipidsInTerms <- genesInTerm(ONTdata)
+        #lipidsInTerms <- genesInTerm(ONTdata)
         
         lipidsInTerms <- data.frame(ID = names(lipidsInTerms),
-                                 Discription = LUT$Discription[match(names(lipidsInTerms), LUT$ID)],
-                                 nr_lipids = sapply(lipidsInTerms, function(term){length(term)}),
-                                 lipids = sapply(lipidsInTerms, function(term){paste(term, collapse = '; ')}))
+                                    Discription = LUT$Discription[match(names(lipidsInTerms), LUT$ID)],
+                                    nr_lipids = sapply(lipidsInTerms, function(term){length(term)}),
+                                    lipids = sapply(lipidsInTerms, function(term){ paste(gsub("^\\[#\\d+\\] ","",term), collapse = '; ')   })
+                                   )
         
         lipidsInTerms <- subset(lipidsInTerms, Discription != lipids)
         colnames(lipidsInTerms) <- c("LION-term","LION-name", "nr_lipids", "lipid identifiers")
         
-        
         ### ggplot of data
         
         to_ggplot_display <- to_display
+        
+        
         to_ggplot_display$color <-
           -log(as.numeric(to_ggplot_display$`FDR q-value`), base = 10)
         to_ggplot_display$color[to_ggplot_display$color > 6] <- 6
         
-        to_ggplot_display <- ggplot(data = to_ggplot_display[1:min(lengthOfTable,40), ],
-                                    aes(
-                                      y = -log(as.numeric(`FDR q-value`), base = 10),
-                                      x = reorder(Discription, -log(as.numeric(
-                                        `FDR q-value`
-                                      ) , base =  10))
-                                    )) +
-          geom_hline(yintercept = -log(0.05, base = 10),
-                     alpha = .3) +
-          geom_bar(stat = 'identity', aes(fill = color), width = .70) +
-          scale_fill_gradient2(
-            limits = c(0, 6),
-            midpoint = -log(0.05, base = 10),
-            low = "grey",
-            mid = "grey",
-            high = "red"
-          ) +
-          ggtitle("LION-term enrichment") +
-          xlab("") +
-          ylab("-LOG(FDR q-value)") +
-          guides(fill = "none") +
-          #scale_y_continuous(limits = c(0, 6))+
-          coord_flip() +
-          theme_pander()
+        
+        if(!is.null(isolate(input$split_direction_in_output))){
+          graph_option <- isolate(input$split_direction_in_output)
+        } else {
+          graph_option <-"combine"
+        }
+        
+        if(isolate(input$method == "Ranking mode" & input$ks_sided == "ks2" & graph_option == "split")){
+          to_ggplot_display$sign <- sign_i_df$sign[match(to_ggplot_display$`Term ID`,sign_i_df$LION)]
+          to_ggplot_display$sign_factor <- factor(ifelse(to_ggplot_display$sign<0,"down","up"), levels = c("up","down"))
+          
+          to_ggplot_display <- 
+            ggplot(data = to_ggplot_display[1:min(lengthOfTable,40), ],
+                   aes(
+                     y = -log(as.numeric(`FDR q-value`), base = 10),
+                     x = reorder(Discription, -log(as.numeric(
+                       `FDR q-value`
+                     ) , base =  10))
+                   )) +
+            geom_hline(yintercept = -log(0.05, base = 10),
+                       alpha = .3) +
+            geom_bar(stat = 'identity', aes(fill = color), width = .70) +
+            scale_fill_gradient2(
+              limits = c(0, 6),
+              midpoint = -log(0.05, base = 10),
+              low = "grey",
+              mid = "grey",
+              high = "red"
+            ) +
+            facet_grid(sign_factor~.,  space = "free", scales = "free")+
+            labs(title = "LION enrichment analysis",
+                 subtitle = paste(isolate(input$conditionA),"vs.", isolate(input$conditionB)))+
+            xlab("") +
+            ylab("-LOG(FDR q-value)") +
+            guides(fill = "none") +
+            coord_flip() +
+            theme_pander()
+          
+        } else {
+          to_ggplot_display <- 
+            ggplot(data = to_ggplot_display[1:min(lengthOfTable,40), ],
+                   aes(
+                     y = -log(as.numeric(`FDR q-value`), base = 10),
+                     x = reorder(Discription, -log(as.numeric(
+                       `FDR q-value`
+                     ) , base =  10))
+                   )) +
+            geom_hline(yintercept = -log(0.05, base = 10),
+                       alpha = .3) +
+            geom_bar(stat = 'identity', aes(fill = color), width = .70) +
+            scale_fill_gradient2(
+              limits = c(0, 6),
+              midpoint = -log(0.05, base = 10),
+              low = "grey",
+              mid = "grey",
+              high = "red"
+            ) +
+            
+            labs(title = "LION enrichment analysis",
+                 subtitle = paste(isolate(input$conditionA),"vs.", isolate(input$conditionB)))+
+            xlab("") +
+            ylab("-LOG(FDR q-value)") +
+            guides(fill = "none") +
+            coord_flip() +
+            theme_pander()
+        }
+          
+        
         
         incProgress(.8, detail = paste("enrichment graph"))
         
@@ -1478,7 +1346,7 @@ function(input, output, session) {
             GenTable(ONTdata,  'p-value' = resultFis, topNodes = 2000)
         }
         
-        if (isolate(input$sub_method) == "(ii) analysis") {
+        if (isolate(input$method) == "Ranking mode") {
           resultTable <-
             GenTable(ONTdata,  'p-value' = resultFis, topNodes = 2000)
           
@@ -1589,7 +1457,7 @@ function(input, output, session) {
         }
         
         if(isolate(input$EmailMissingLipids)){   ## email missing lipids when option is set
-          
+          #sendEmail(subject = "missing annotations",mail_message = paste(subset(lipidExistance,`LION ID`=="not found")$input, collapse = "\n"))
           sendEmail(subject = "missing annotations", mail_message = paste(apply(lipidExistance, 1, function(row){paste(row, collapse = "\t")}), collapse = "\n"))
         }
         
@@ -1598,10 +1466,14 @@ function(input, output, session) {
         ### now LUT is available, match LION names correctly
         lipidExistance$'LION name' <- LUT$Discription[match(lipidExistance$'LION ID', LUT$ID)]
         lipidExistance$'LION name'[is.na(lipidExistance$'LION name')] <- "not found"
+        
+        
        
         list(
           ONTdata = ONTdata,
           lipidExistance = lipidExistance,
+          lipidExistance_toview = lipidExistance_toview,
+          matching_statistics = matching_statistics,
           to_display = to_display,
           to_display_detailed = to_display_detailed,
           lipidReport = lipidReport,
@@ -1618,6 +1490,8 @@ function(input, output, session) {
         list(
           ONTdata = NULL,
           lipidExistance = NULL,
+          lipidExistance_toview, NULL,
+          matching_statistics = NULL,
           to_display = NULL,
           to_display_detailed = NULL,
           lipidReport = NULL,
@@ -1704,9 +1578,10 @@ function(input, output, session) {
   output$mapping_percentage <- renderText({          
     
     if (is.null(dataBlock()$lipidExistance)){  
-      "Unexpected input"  
+      output_text <- "Unexpected input"  
     } else {
-      mappings <- !(dataBlock()$lipidExistance$'LION ID' == 'not found')
+     
+      matching_statistics <- dataBlock()$matching_statistics
       
       if (length(isolate(dataBlock()$to_display[,1])) == 0){
         comment <- "\nHowever, no upstream LION-terms were found for analysis."
@@ -1715,12 +1590,19 @@ function(input, output, session) {
         hideTab(inputId = "tabs", target = "LION network view")
       } else comment <- ""
       
-      paste(
-        sum(mappings), " out of ",  length(mappings),  " ", "(", round(mean(mappings)  * 100, digits = 2), "%", ")",
-        " identifiers could be matched to LION.", comment,
-        sep = ""
-      )
+     
+      color_df <- data.frame(match = c("direct matching","smart matching", "fatty acid-association prediction",""),
+                             color = c("#4f4d4d","#9c3c2d","#c4942b","#bdbbbf"))
+      
+       output_text <- paste("<i>",
+                           matching_statistics$matched, " out of ",  matching_statistics$total,  " ", "(", round(matching_statistics$percent, digits = 2), "%", ")",
+                           " identifiers are matched to LION. </i><br><br>",   
+                           paste("<font color='",color_df$color,"'>",color_df$match,"</font>" , sep ="", collapse = "<br>"),
+                           sep = "")
     }
+    cat("mapping % done\n")
+    output_text
+    
   })    
       
       
@@ -1733,11 +1615,11 @@ function(input, output, session) {
     })
   
    
-      output$value <- renderTable({
-        table <- dataBlock()$lipidExistance
-        
-        table
-      })
+  #output$value <- renderTable({
+  output$value <- renderFormattable({
+    table <- dataBlock()$lipidExistance_toview   #lipidExistance
+    formattable(table,align = c("l","l","l"))
+  })     #, sanitize.text.function=identity)
       
       output$downloadInput <- downloadHandler(
         
@@ -1777,7 +1659,7 @@ function(input, output, session) {
           write.csv(dataBlock()$to_display_detailed, 
                     file = "LION-enrichment-detailed-job.csv", row.names = FALSE,quote = TRUE)
           write.csv(dataBlock()$lipidReport, 
-                    file = "LION-lipid-associations.csv", row.names = FALSE,quote = FALSE)
+                    file = "LION-lipid-associations.csv", row.names = FALSE,quote = TRUE)
           write.csv(dataBlock()$lipidsInTerms, 
                     file = "LION-term-associations.csv", row.names = FALSE,quote = TRUE)
           
@@ -1821,7 +1703,7 @@ function(input, output, session) {
       observe({
         if(is.null(input$send) || input$send==0) return(NULL)
         from <- isolate(input$from)
-        to <- "m.r.molenaar@uu.nl"
+        to <- "######"
         subject <- isolate(input$subject)
         msg <- isolate(input$message)
         
@@ -1842,5 +1724,6 @@ function(input, output, session) {
         LIONstructure
       })
       
+   
       
 }
