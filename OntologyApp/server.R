@@ -1,5 +1,6 @@
 options(stringsAsFactors = FALSE,shiny.sanitize.errors = F)
 
+ 
 ## examples
 
 cluster_example <- read.csv(file = "data/clusters_lipids.csv")
@@ -38,6 +39,9 @@ library(shinyWidgets)
 library(shinyBS)
 library(httr)
 library(formattable)
+library(jsonlite)
+library(ggrepel)
+library(shinycssloaders)
 
 
 ## loading lipid ontology data
@@ -61,33 +65,91 @@ lipidID2TERM <- readMappings(file = associationFile)   ## topOnto function, but 
 # Define server logic for random distribution application
 function(input, output, session) {
   
-  
+  showNotification(ui = "",
+                   action =  p("By using this app you agree with the", a('Terms of Usage.',
+                               href="https://martijnmolenaar.github.io/lipidontology.com/faq.html#basics", 
+                               target="_blank")),
+                   duration = 14, type = "default")
+ 
   ### hide tabs at start-up
   hideTab(inputId = "tabs", target = "LION input")
   hideTab(inputId = "tabs", target = "LION enrichment table")
   hideTab(inputId = "tabs", target = "LION enrichment graph")
   hideTab(inputId = "tabs", target = "LION network view")
   
+  observe({
+    query <- parseQueryString(session$clientData$url_search)
+    
+    if(!is.null(query[['studyid']])){
+      updatePrettyRadioButtons(
+        session,
+        inputId = "file_input",
+        selected = "load external dataset"
+      )
+      
+    }
+  })
   
+ 
   ## pre-processing with CSVs:
   
   input_data <- reactive({
     
-    req(input$file1)
+        
+    ifelse(input$file_input=="file input",
+               req(input$file1),
+               req(input$MWfile1))
     
     
-    df <- try(read.csv(input$file1$datapath,
-                   header = FALSE,
-                   sep = ",",
-                   quote = ""))
+
+ 
+    isolate(if(input$file_input == "file input"){
+      file_location <- input$file1$datapath
+      metadata <- input$file1$name
+    } else if(input$file_input == "load external dataset"){
+      file_location <- paste("https://www.metabolomicsworkbench.org/rest/study/study_id/",
+                             input$MWfile1,
+                             "/lion/", sep = "")
+      
+      metadata <- fromJSON(paste("https://www.metabolomicsworkbench.org/rest/study/study_id/",
+                                           input$MWfile1,
+                                           "/summary", sep = ""))$study_title
+    })
     
+  
+    withProgress(message = 'loading data:', value = 0, {
+      if(grepl("metabolomicsworkbench.org/rest", file_location)){
+        incProgress(.1, detail = paste("from Metabolomis Workbench"))
+        
+        df <- try(read.csv(file_location,
+                           header = FALSE,
+                           sep = "," #, quote = ""
+        ))
+        
+        incProgress(.9, detail = paste("..done"))
+      } else {
+        
+        df <- try(read.csv(file_location,
+                           header = FALSE,
+                           sep = "," #, quote = ""
+        ))
+      }
+    })
+    
+    
+    ###
     
     ## error handling
     
     errors <- NULL
     if (!(is.data.frame(df))) {
       df <- data.frame(errors = df[1], column = 0)
-      errors <- c(errors, "ERROR: File type not supported")
+      if(isolate(input$file_input) == "load external dataset"){
+        errors <- c(errors, "ERROR: Metabolomics Workbench study ID not found")
+      } else {
+        errors <- c(errors, "ERROR: File type not supported")
+      }
+      
     } else {
       if (dim(df)[2]  == 1) {
         errors <- c(errors, "ERROR: No commas found to seperate columns")
@@ -118,14 +180,21 @@ function(input, output, session) {
     ## end error handling
     
     
+    isolate(if(input$file_input == "load external dataset"){
+      studyID <- paste(input$MWfile1,": ",sep = "")
+    } else {studyID <- ""})
+    
     #if(!(is.null(errors))){
     if(errors==""){
-      input_data <- list(df = df,
+      
+       input_data <- list(df = df,
          matrix = sapply(df[-c(1,2),-1], as.numeric),
          conditions = unique(as.character(df[1,-1])),
          samples = as.character(df[2,-1]),
          meta = df[1:2,-1],
          IDs = df[-c(1,2),1],
+         studyID = studyID,
+         metadata = metadata,
          errors = errors)
     } else {
       input_data <-list(df = NULL,
@@ -134,6 +203,8 @@ function(input, output, session) {
            samples = NULL,
            meta = NULL,
            IDs = NULL,
+           studyID = NULL,
+           metadata = NULL,
            errors = errors)
     }
     
@@ -141,18 +212,129 @@ function(input, output, session) {
     
   })
   
+  output$load_datasetUI <- renderUI({
+    file_input <- input$file_input
+    
+    if (file_input == "file input") {
+      
+      fluidRow(column(offset = .3, width = 12,
+      
+      br(),
+      strong("Choose CSV File:"),
+      fluidRow(
+        
+        column(offset=0,#style='margin-left:2%;' ,
+               width = 10,
+               popify(placement = "bottom", title = "File-input info",
+                      fileInput("file1", label = NULL,
+                                multiple = FALSE,
+                                accept = c("text/csv",
+                                           "text/comma-separated-values,text/plain",
+                                           ".csv") ),
+                      content = 'Format your dataset as comma seperated value files (.csv), with the first column reserved for metabolites and the other columns for numeric data (containing decimal points). Use double column headers; with row 1 containing condition identifiers and row 2 containing sample identifiers. Submit at least duplicates per condition. Dataset should be normalized before submission. Download a dataset below for an example.'
+                      
+               )),
+        column(offset=0, width = 1,style = "margin-top: 5px;",align="center",
+               popify(placement = "right", title = "Lipid nomenclature", options=list(container="body"),
+                      el = icon(name = "question",lib = "font-awesome", "fa-2x"),
+                      content = 'Format lipids in LIPIDMAPS notation style: a class-prefix followed by (summed) fatty acid(s) surrounded by parentheses. Examples are: PC(32:1); PE(18:1/16:0); SM(d18:1/18:0); TAG(54:2); etc. Check www.lipidmaps.org for more examples. LION will try to reformat alternative notation styles into LIPIDMAPS format.'))),
+      
+      downloadLink("examplePre1", "example set 1 (organelle fractions) [1]"),
+      br(),
+      downloadLink("examplePre2", "example set 2 (CHO-k1 incubated with several FFAs) [2]"),
+      br(),
+      downloadLink("examplePre3", "example set 3 (CHO-k1 incubated with AA) [2]"),
+      br(),
+      br(),
+      em("[1] Andreyev AY, et al., 2010"),
+      br(),
+      em("[2] Molenaar MR, et al., 2019"),
+      br(),br(),
+      uiOutput("selectLocalStatisticUI")
+      ))
+  
+      
+    } else {     ### to load Metabolomics Workbench-file
+      fluidRow(column(offset = .3, width = 12,
+        
+        br(),
+        
+        fluidRow(
+          
+          column(offset=0,#style='margin-left:2%;' ,
+                 width = 10,
+                 popify(placement = "bottom", title = "Metabolomics Workbench",
+                        searchInput(
+                          inputId = "MWfile1",
+                          label = "Enter Metabolomics Workbench study ID", 
+                          placeholder = "study ID", 
+                          btnSearch = icon("search"), 
+                          btnReset = icon("remove"),
+                          width = "100%"
+                        ), content = "In this field, a  study ID from the Metabolomics Workbench data repository can be entered—the dataset will be loaded directly to LION/web in the required format. To browse studies, please visit the Metabolomics Workbench website (see below). Please note that LION/web does only process lipids."
+                        
+                 ))
+          ),
+        
+        br(),
+        em("example: "),br(),
+        "ST001140: ",
+        a('Changes in the Canine Plasma Lipidome after Short- and Long-Term Excess Glucocorticoid Exposure',  
+          href="https://www.metabolomicsworkbench.org/data/DRCCMetadata.php?Mode=Study&StudyID=ST001140", target="_blank"),
+        br(),br(),
+        em("For more information, please visit the",  a('Metabolomics Workbench data repository.',  href="https://www.metabolomicsworkbench.org/data/browse.php", target="_blank")),
+        br(),
+        br(),
+        uiOutput("selectLocalStatisticUI")
+      ))
+    }
+    
+  })
+  
+  
+  observeEvent(input$file_input, {
+    
+    query <- parseQueryString(session$clientData$url_search)
+    
+    if(!is.null(query[['studyid']])){
+      updateSearchInput(
+        session,
+        inputId = "MWfile1",
+        value = query[['studyid']],
+        trigger = TRUE,
+        label = "Enter Metabolomics Workbench study ID"
+        
+      )
+  
+    }
+    })
+
   output$selectLocalStatisticUI <- renderUI({
+    
     input_data <- input_data()
     conditions <- input_data$conditions
+    
     
     if (input_data$errors == "") {
       
       wellPanel(
+        tags$b(input_data$metadata),
+        br(),br(),
+       
         popify(placement = "bottom", title = "Info",
-        radioButtons("local_statistics", label = h4("Select local statistics to rank input identifiers"),
+        radioButtons("local_statistics", label = h5("Select local statistics to rank input identifiers"),
                      choices = list("one-tailed T-test (2 conditions)" = 1, "2-LOG[fold change] (2 conditions)" = 2, "one-way ANOVA F-test (>2 conditions)" = 3), 
                      selected = 1), content = 'Select a local statistic to rank the metabolites based on the provided dataset. LION-terms associated with lipids higher ranked than expected by chance will be reported as enriched.'),
-      
+        popify(
+          placement = "bottom",
+          title = "Info",
+          checkboxInput(
+            inputId = "normalization",
+            label = "normalize signals as percentage",
+            value = FALSE
+          ),
+          content = 'If checked, lipid signals are expressed as percentage of the total signal per sample. This is useful when input data is not normalized.'
+        ), 
         br(),
         uiOutput("conditionsUI")
       )
@@ -173,8 +355,10 @@ function(input, output, session) {
         column(width = 11,
                selectizeInput("split_direction_in_output", 
                               label = NULL, 
-                              choices = c("Separate up- and downregulated terms in figure" = "split", 
-                                          "Mix up- and downregulated terms in figure" = "combine"), selected = "split"))
+                              choices = c("Separate up- and downregulated terms in barchart" = "split", 
+                                          "Combine up- and downregulated terms in barchart" = "combine",
+                                          "Display data in volcano plot" = "volcano"), 
+                              selected = "split"))
       )
       
     }
@@ -199,7 +383,7 @@ function(input, output, session) {
             width = 6,
             selectInput(
               "conditionA",
-              h4("condition of interest"),
+              h5("condition of interest"),
               conditions,
               selected = conditions[1]
             )
@@ -208,7 +392,7 @@ function(input, output, session) {
             width = 6,
             selectInput(
               "conditionB",
-              h4("control condition"),
+              h5("control condition"),
               conditions,
               selected = conditions[2]
             )
@@ -305,21 +489,32 @@ function(input, output, session) {
   output$conditionsUI_pB <- renderUI({
     data <- pre_processed_data()[[1]]   ### show when 'pre_processed_data()' is constructed
     if(!(any(is.na(data$pValues)))){
+      fluidRow(
       actionButton(inputId = "submitPreprocessing",
                    label = "  Use values as local statistics", 
                    width = NULL,
-                   icon = icon("share-square-o", lib = "font-awesome"))
+                   icon = icon("share-square-o", lib = "font-awesome")),
+      downloadButton("download_pValues", "")
+      )
     }
     
     
   })
 
   pre_processed_data <-     eventReactive(input$calculatePreprocessing, {
-    
+
+    input_data <- input_data()
+
+    if(isolate(input$normalization)){  ## normalization option switched on
+      input_data$matrix[] <- 
+        apply(input_data$matrix,2,function(i){
+          i / sum(i) * 100
+        })
+    }
     
     if(any(input$local_statistics %in% c(1,2))){
-    setA <- input_data()$matrix[,which(input_data()$meta[1,] == input$conditionA)]
-    setB <- input_data()$matrix[,which(input_data()$meta[1,] == input$conditionB)]
+    setA <- input_data$matrix[,which(input_data$meta[1,] == input$conditionA)]
+    setB <- input_data$matrix[,which(input_data$meta[1,] == input$conditionB)]
     }
     
     if(input$local_statistics == 1){   ### when t-test p-values are selected
@@ -350,7 +545,7 @@ function(input, output, session) {
     
     if(input$local_statistics == 3){   ### when ANOVA is selected
       
-      input_data <- input_data()
+      #input_data <- input_data()
       
       if (length(input$selectedConditions) > 1) {      ## minimum of 2 conditions needed
         pValues <- 
@@ -500,27 +695,69 @@ function(input, output, session) {
   
   observeEvent(input$submitB, {
     ## first unhide tabs
-    showTab(inputId = "tabs", target = "LION input")
-    showTab(inputId = "tabs", target = "LION enrichment table")
-    showTab(inputId = "tabs", target = "LION enrichment graph")
-    showTab(inputId = "tabs", target = "LION network view")  
     
-    dataBlock()
-    
-    ## goto LION input
-    updateTabsetPanel(session, "tabs",
+    input_listwPvalues <- input$listwPvalues
+     
+    if(grepl("\t", input_listwPvalues) & 
+         grepl("\n", input_listwPvalues) &
+         grepl("\\D",input_listwPvalues) &
+         grepl("\\d",input_listwPvalues) ){   ## input requirements
+      
+    #if(input$listwPvalues!=""){
+      showTab(inputId = "tabs", target = "LION input")
+      showTab(inputId = "tabs", target = "LION enrichment table")
+      showTab(inputId = "tabs", target = "LION enrichment graph")
+      showTab(inputId = "tabs", target = "LION network view") 
+      
+      dataBlock()
+      
+      ## goto LION input
+      updateTabsetPanel(session, "tabs",
                       selected = "LION input")
+    } else {
+      
+      hideTab(inputId = "tabs", target = "LION input")
+      hideTab(inputId = "tabs", target = "LION enrichment table")
+      hideTab(inputId = "tabs", target = "LION enrichment graph")
+      hideTab(inputId = "tabs", target = "LION network view") 
+      
+      updateTabsetPanel(session, "tabs",
+                        selected = "General information")
+      showNotification(ui = "",
+                       action =  "No or incorrect input found. Please reformat and submit data in the text box.",
+                       duration = 3, type = 'error')
+    }
   })
   observeEvent(input$submitA, {
-    ## first unhide tabs
-    showTab(inputId = "tabs", target = "LION input")
-    showTab(inputId = "tabs", target = "LION enrichment table")
-    showTab(inputId = "tabs", target = "LION enrichment graph")
-    showTab(inputId = "tabs", target = "LION network view")  
+    input_list <- c(input$sublist, input$background)
+    
+    if(all(grepl("\n", input_list) & grepl("\\D",input_list))){   ## input requirements
+    
+    #if(input$sublist!="" & input$background!=""){
+      ## first unhide tabs
+      showTab(inputId = "tabs", target = "LION input")
+      showTab(inputId = "tabs", target = "LION enrichment table")
+      showTab(inputId = "tabs", target = "LION enrichment graph")
+      showTab(inputId = "tabs", target = "LION network view")  
+    
+      dataBlock()
     
     ## goto LION input
-    updateTabsetPanel(session, "tabs",
+      updateTabsetPanel(session, "tabs",
                       selected = "LION input")
+    } else {
+      
+      hideTab(inputId = "tabs", target = "LION input")
+      hideTab(inputId = "tabs", target = "LION enrichment table")
+      hideTab(inputId = "tabs", target = "LION enrichment graph")
+      hideTab(inputId = "tabs", target = "LION network view") 
+      
+      updateTabsetPanel(session, "tabs",
+                        selected = "General information")
+      showNotification(ui = "",
+                       action = "No or incorrect input found. Please reformat and submit data in the two text boxes.",
+                       duration = 3, type = 'error')
+    }
   })
 
   
@@ -532,10 +769,9 @@ function(input, output, session) {
     
     input$submitB
     input$submitA
-    
+
     input_listwPvalues <- isolate(input$listwPvalues)
-    
-    
+
     ### some lipids contain comma's, so only the last comma should be regarded as a separator
     numericPattern <- unlist(regmatches(input_listwPvalues, gregexpr(", *(\\d|\\.)+(\n|$)", input_listwPvalues)) )   ## extract patterns to replace last comma
     
@@ -547,7 +783,7 @@ function(input, output, session) {
     
     ####  is input appropriate??
     
-    if (isolate(input$sub_method) == "(ii) analysis") {
+    if (isolate(input$sub_method) == "(ii) analysis" & input$method == "Ranking mode") {
       if(!(grepl("\t", input_listwPvalues) & 
            grepl("\n", input_listwPvalues) &
            grepl("\\D",input_listwPvalues) &
@@ -794,31 +1030,35 @@ function(input, output, session) {
      
       colnames(lipidExistance) <- c('input','simplified input','LION name','LION ID', "match")
       
-      # lipidExistance_toview <-
-      #   do.call("rbind", lapply(lipidExistance_list, function(lipidExistance_i) {
-      #     data.frame(
-      #       input = unique(lipidExistance_i$input),
-      #       name = paste(lipidExistance_i$name, collapse = "<br>"),
-      #       LION = paste(lipidExistance_i$LION, collapse = "<br>")
-      #     )
-      #   }))
       
       color_df <- data.frame(match = c("direct","smart matching", "FA-prediction",""),
                              color = c("#4f4d4d","#9c3c2d","#c4942b","#bdbbbf"))
       
       lipidExistance_toview <-
         do.call("rbind", lapply(lipidExistance_list, function(lipidExistance_i) {
-          
           color_pattern <- color_df$color[match(lipidExistance_i$match, color_df$match)]
           
           data.frame(
             input = unique(lipidExistance_i$input),
             name = paste("<font color='",color_pattern,"'>",lipidExistance_i$name,"</font>" , sep ="", collapse = "<br>"),
-            LION = paste("<font color='",color_pattern,"'>",lipidExistance_i$LION,"</font>" , sep ="",  collapse = "<br>")
+            #LION = paste("<font color='",color_pattern,"'>",lipidExistance_i$LION,"</font>" , sep ="",  collapse = "<br>")
+            LION = paste("<a href='",
+                         'http://bioportal.bioontology.org/ontologies/LION/?p=classes&conceptid=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2F',
+                         gsub(":","_",lipidExistance_i$LION),
+                         "' style='color: ", color_pattern,
+                         "' target='_blank'>",
+                         lipidExistance_i$LION,
+                         "</a>",
+                         sep = "", collapse = "<br>")
+            
+            
           )
         }))
+      
+      
       colnames(lipidExistance_toview) <- c('input','LION name','LION ID')
       
+      lipidExistance_toview[[3]] <- gsub(" href=.+Fnot found'","",lipidExistance_toview[[3]])
       
       ##### end new 20191006
       
@@ -1052,18 +1292,23 @@ function(input, output, session) {
               )
             }
             
-            
-            
-           
             resultFis <-
               runTest(ONTdata,
                       algorithm = "classic",
-                      statistic = isolate(input$ks_sided))  #'ks' 'ks2)
-            
-            sign_i <- sign(resultFis@score)
+                      statistic = isolate(input$ks_sided))
+          
             resultFis@score <- abs(resultFis@score)
-            sign_i_df <- data.frame(LION = names(resultFis@score), sign = sign_i)
+
+            ES <- runTest(ONTdata,  algorithm = "classic",
+                            statistic = "ks.score")@score
             
+            sign_i_df <- data.frame(LION = names(ES), 
+                                    sign = sign(ES),
+                                    ES = ES)
+            
+            
+            
+       
             incProgress(.7, detail = paste("enrichment statistics"))
             
             to_display <-
@@ -1081,8 +1326,6 @@ function(input, output, session) {
             to_display$Term <- LUT$Discription[match(to_display$TERM.ID, LUT$ID)]        ### otherwise, some names are abbrev.
             to_display <- to_display[to_display$Annotated > 2, ]        ### remove terms with 1 or 2 lipids
             
-            
-           
             ####  limiting by LION-term selection
             if(isolate(input$LIONselection)){    ### switch for LION-selection
               TermsOfInterest <- get_selected(isolate(input$tree), format = "names") 
@@ -1191,13 +1434,10 @@ function(input, output, session) {
               )
             to_display <- to_display[, c(1, 2, 3, 6, 7)]
             
-            
-            if(!is.null(sign_i_df)){
+            if(!is.null(sign_i_df) & isolate(input$ks_sided) == "ks2"){   ### show scores when 2-sided
+              to_display$ES <- sign_i_df$ES[match(to_display$`Term ID`, sign_i_df$LION)]
               to_display$Regulated <- as.character(factor(sign_i_df$sign[match(to_display$`Term ID`, sign_i_df$LION)], levels = c(1,-1), labels = c("UP","DOWN")))
-              if(all(to_display$Regulated == "UP")){
-                to_display$Regulated <- NULL
               }
-            }
             
             
         
@@ -1205,7 +1445,6 @@ function(input, output, session) {
             to_display <- data.frame()
           }
         }
-        
         
         lengthOfTable <- length(to_display$"Term ID")
         
@@ -1259,10 +1498,9 @@ function(input, output, session) {
         colnames(lipidsInTerms) <- c("LION-term","LION-name", "nr_lipids", "lipid identifiers")
         
         ### ggplot of data
-        
         to_ggplot_display <- to_display
         
-        
+
         to_ggplot_display$color <-
           -log(as.numeric(to_ggplot_display$`FDR q-value`), base = 10)
         to_ggplot_display$color[to_ggplot_display$color > 6] <- 6
@@ -1273,6 +1511,38 @@ function(input, output, session) {
         } else {
           graph_option <-"combine"
         }
+        
+        
+        main_title <- substitute(bold("LION enrichment analysis")~
+                         italic(x), list(x = tolower(isolate(input$method))))
+        
+        sub_title <- 
+          c(ID = ifelse(
+            isolate(input$file_input == "load external dataset") & isolate(input$method) == "Ranking mode",
+            paste(isolate(input_data()$studyID)," ", sep =""),
+            ""
+          ),
+          A = ifelse(isolate(input$method) == "Target-list mode","",paste("",isolate(input$conditionA), sep = "")),
+          B = ifelse(isolate(input$method) == "Target-list mode","",paste("",isolate(input$conditionB), sep = "")),
+          vs  = ifelse(is.null(isolate(input$conditionA)) | is.null(isolate(input$conditionB)) | isolate(input$method) == "Target-list mode",
+                       "", "vs."),
+          mode = isolate(input$method))
+        
+        sub_title <- 
+          substitute(bold(studyID) ~ A ~ italic(vs)~ B, 
+                     list(studyID = sub_title["ID"],
+                          A = sub_title["A"],
+                          B = sub_title["B"],
+                          vs  = sub_title["vs"])
+          )
+        
+        if(!is.null(isolate(input$local_statistics))){
+          if(isolate(input$local_statistics)=="3"){   ### in case of a F-test for local statistics
+            sub_title <- ""
+          }
+        }
+        
+        
         
         if(isolate(input$method == "Ranking mode" & input$ks_sided == "ks2" & graph_option == "split")){
           to_ggplot_display$sign <- sign_i_df$sign[match(to_ggplot_display$`Term ID`,sign_i_df$LION)]
@@ -1297,13 +1567,49 @@ function(input, output, session) {
               high = "red"
             ) +
             facet_grid(sign_factor~.,  space = "free", scales = "free")+
-            labs(title = "LION enrichment analysis",
-                 subtitle = paste(isolate(input$conditionA),"vs.", isolate(input$conditionB)))+
+            labs(title = main_title,      
+                 subtitle = sub_title)+
             xlab("") +
             ylab("-LOG(FDR q-value)") +
             guides(fill = "none") +
             coord_flip() +
             theme_pander()
+        } else if(isolate(input$method == "Ranking mode" & input$ks_sided == "ks2" & graph_option == "volcano")) {
+          ## display as volcano plot
+         
+          ES <- runTest(ONTdata,
+                  algorithm = "classic",
+                  statistic = "ks.score")@score
+          
+
+          to_ggplot_display$ES <- ES[match(to_ggplot_display$`Term ID`, names(ES))]
+          
+          to_ggplot_display <- 
+          ggplot(data = to_ggplot_display,
+                 aes(x = ES, 
+                     y = -log(as.numeric(`FDR q-value`), base = 10),
+                     size = Annotated)
+          ) +
+            geom_hline(yintercept = -log(0.05, base = 10),
+                       alpha = .8, linetype = 2) +
+            geom_vline(xintercept = 0,
+                       alpha = .8, linetype = 2) +
+            geom_point(shape = 21,aes(fill = color)) +
+            geom_text_repel(data = to_ggplot_display[as.numeric(to_ggplot_display$`FDR q-value`) < 0.1,],
+                            aes(label = Discription), size = 4)+
+            scale_fill_gradient2(
+              limits = c(0, 6),
+              midpoint = -log(0.05, base = 10),
+              low = "grey",
+              mid = "grey",
+              high = "red"
+            ) +
+            labs(x ="LION-enrichment score (ES)", y = "-LOG(FDR q-value)", 
+                 size = "# of lipids", title =  main_title,
+                 subtitle = sub_title)+
+            guides(fill = "none") +
+            theme_minimal()+
+            theme(plot.title = element_text(hjust = 1), plot.subtitle = element_text(hjust = 1))
           
         } else {
           to_ggplot_display <- 
@@ -1324,9 +1630,8 @@ function(input, output, session) {
               mid = "grey",
               high = "red"
             ) +
-            
-            labs(title = "LION enrichment analysis",
-                 subtitle = paste(isolate(input$conditionA),"vs.", isolate(input$conditionB)))+
+            labs(title = main_title,      
+                 subtitle = sub_title)+
             xlab("") +
             ylab("-LOG(FDR q-value)") +
             guides(fill = "none") +
@@ -1363,12 +1668,15 @@ function(input, output, session) {
               as.numeric(resultTable$'FDR q-value') < 0.05
             ), 5))   ## with a minimum of 5
           
+          ### score(resultFis) >>> 0 scores are not tolerated
+          resultFis_score <- score(resultFis)
+          resultFis_score[resultFis_score==0] <- 0.001
           
           #nr of nodes by FDR qvalue
           enrichmentGraph <-
             showSigOfNodes(
               ONTdata,
-              score(resultFis),
+              resultFis_score, #k, #abs(resultFis_score), #score(resultFis),
               firstSigNodes = nrOfSignNodes,
               useInfo = 'all',
               swPlot = FALSE
@@ -1633,9 +1941,18 @@ function(input, output, session) {
         }
       )
       
-      # Generate an HTML table view of the ontology data
-      output$ontology.table <- renderTable({
-        dataBlock()$to_display
+   
+      output$ontology.table <- renderFormattable({
+        table <- dataBlock()$to_display
+        rownames(table) <- NULL
+        ## add linkds
+        table[[1]] <-
+        paste("<a href='http://bioportal.bioontology.org/ontologies/LION/?p=classes&conceptid=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2F",
+              gsub(":","_",table[[1]]), "' style='color: #4f4d4d' target='_blank'>",
+              table[[1]],"</a>",      sep = "")
+        
+        formattable(table, align = "l")
+        
         
       })
 
@@ -1646,6 +1963,20 @@ function(input, output, session) {
         },
         content = function(file) {
           write.csv(dataBlock()$to_display, 
+                    file, row.names = FALSE,quote = TRUE)
+        }
+      )
+      
+      output$download_pValues <- downloadHandler(
+        
+        filename = function() {
+          paste("LION-rankingvalues-job",isolate(input$submitB)+isolate(input$submitA), ".csv", sep="")
+          
+        },
+        content = function(file) {
+          pre_processed_data <- pre_processed_data()[[1]]
+          colnames(pre_processed_data) <- c("ID", "value")
+          write.csv(pre_processed_data, 
                     file, row.names = FALSE,quote = TRUE)
         }
       )
@@ -1676,14 +2007,22 @@ function(input, output, session) {
         filename = function() { 
           paste("LION-enrichment-plot-job",isolate(input$submitB)+isolate(input$submitA),  '.png', sep='') },
         content = function(file) {
-          ggsave(file,dataBlock()$to_ggplot_display,   device = 'png', dpi=300)
+          ggsave(file, width = 2.5*5.52, height = 2.5*3.66,
+                 dataBlock()$to_ggplot_display+
+                   theme(plot.subtitle = element_text(hjust = 1),
+                         plot.title = element_text(hjust = 1)),   
+                 device = 'png', dpi=300)
         }
       )
       output$downloadPlotSVG <- downloadHandler(
         filename = function() { 
           paste("LION-enrichment-plot-job",isolate(input$submitB)+isolate(input$submitA),  '.svg', sep='') },
         content = function(file) {
-          ggsave(file,dataBlock()$to_ggplot_display,   device = svg,   scale=1.5)
+          ggsave(file, width = 1.5*5.52, height = 1.5*3.66,
+                 dataBlock()$to_ggplot_display+
+                   theme(plot.subtitle = element_text(hjust = 1),
+                         plot.title = element_text(hjust = 1)),   
+                 device = svg,   scale=1.5)
         }
       )
         
@@ -1703,7 +2042,7 @@ function(input, output, session) {
       observe({
         if(is.null(input$send) || input$send==0) return(NULL)
         from <- isolate(input$from)
-        to <- "######"
+        to <- "xxx@xxx.nl"
         subject <- isolate(input$subject)
         msg <- isolate(input$message)
         
@@ -1724,6 +2063,6 @@ function(input, output, session) {
         LIONstructure
       })
       
-   
+ 
       
 }

@@ -5,11 +5,17 @@ library(shinyTree)
 library(shinyWidgets)
 library(shinyBS)
 library(formattable)
+library(shinycssloaders)
+
 
 ##
 
+
+# Define UI for random distribution application 
+#fluidPage(theme = shinytheme("cosmo"),
 fluidPage(theme = shinytheme("journal"),
           
+          # Application title
           #titlePanel("LION/web | Lipid Ontology enrichment analysis for lipidomics"),
           br(),
           
@@ -85,34 +91,19 @@ fluidPage(theme = shinytheme("journal"),
                                                br(),
                                                tabsetPanel(id = "sub_method", type = "pills", selected = "(i) process input",
                                                            tabPanel("(i) process input", 
-                                                                    br(),
-                                                                    "Choose CSV File:",
-                                                                    fluidRow(
-                                                                      
-                                                                      column(offset=0,#style='margin-left:2%;' ,
-                                                                             width = 10,
-                                                                             popify(placement = "bottom", title = "File-input info",
-                                                                             fileInput("file1", label = NULL,
-                                                                                       multiple = FALSE,
-                                                                                       accept = c("text/csv",
-                                                                                                  "text/comma-separated-values,text/plain",
-                                                                                                  ".csv") ),
-                                                                             content = 'Format your dataset as comma seperated value files (.csv), with the first column reserved for metabolites and the other columns for numeric data (containing decimal points). Use double column headers; with row 1 containing condition identifiers and row 2 containing sample identifiers. Submit at least duplicates per condition. Dataset should be normalized before submission. Download a dataset below for an example.'
-                                                                      
-                                                                    )),
-                                                                    column(offset=0, width = 1,style = "margin-top: 5px;",align="center",
-                                                                    popify(placement = "right", title = "Lipid nomenclature", options=list(container="body"),
-                                                                           el = icon(name = "question",lib = "font-awesome", "fa-2x"),
-                                                                           content = 'Format lipids in LIPIDMAPS notation style: a class-prefix followed by (summed) fatty acid(s) surrounded by parentheses. Examples are: PC(32:1); PE(18:1/16:0); SM(d18:1/18:0); TAG(54:2); etc. Check www.lipidmaps.org for more examples. LION will try to reformat alternative notation styles into LIPIDMAPS format.'))),
-                                                                    
-                                                                    downloadLink("examplePre1", "example set 1 (organelle fractions, adapted from Andreyev AY et al, 2010)"),
-                                                                    br(),
-                                                                    downloadLink("examplePre2", "example set 2 (CHO-k1 incubated with several FFAs)"),
-                                                                    br(),
-                                                                    downloadLink("examplePre3", "example set 3 (CHO-k1 incubated with AA)"),
-                                                                    br(),
-                                                                    br(),
-                                                                    uiOutput("selectLocalStatisticUI")),
+                                                                    #br(),
+                                                                    prettyRadioButtons(
+                                                                      inputId = "file_input",
+                                                                      label = "",
+                                                                      choices = c("file input", 
+                                                                                  "load external dataset"),
+                                                                      inline = TRUE, 
+                                                                      status = "danger",
+                                                                      fill = TRUE
+                                                                    ),
+                                                                    withSpinner(color = "#9c3c2d", size = .5,
+                                                                      uiOutput("load_datasetUI"))
+                                                                    ),
                                                            tabPanel("(ii) analysis", 
                                                                     br(),
                                                                     popify(
@@ -198,7 +189,7 @@ fluidPage(theme = shinytheme("journal"),
                                                br(),
                                                "* from Molenaar MR, et al., 2019"
                                                ),
-                                      tabPanel("Contact", 
+                                      tabPanel(id = "Contact", title = "", icon = icon("envelope-open-text", lib = "font-awesome"),
                                                br(),
                                                br(),
                                                'Questions, feedback or a request to increase coverage? Contact us:',
@@ -228,6 +219,9 @@ fluidPage(theme = shinytheme("journal"),
                           tabPanel("General information", 
                                    
                                    h3("LION/web: LION enrichment analysis"),
+                                   br(),
+                                   img(src="LIONicon enrich.png", align = "left", height = '200px'), #, width = '550px'),
+                                   br(),br(),br(),br(),br(),br(),br(),br(),br(),br(),
                                    p('The Lipid Ontology (LION) enrichment analysis web application (LION/web) is a novel bioinformatics tool for lipidomics that',
                                      'enables users to search for enriched LION-terms in lipidomic subsets. LION-terms contain detailed lipid classification',
                                      'by LIPIDMAPS, biophysical data, lipid functions and organelle associations.'),
@@ -242,12 +236,12 @@ fluidPage(theme = shinytheme("journal"),
                                    br(),
                                    br(),
                                    br(),
-                                   p("Biochemistry & Cell Biology, Universiteit Utrecht, The Netherlands"),
-                                   'LION/web v. 2019.11.26',
+                                   p("Division Cell Biology, Metabolism & Cancer, Department Biomolecular Health Sciences, Universiteit Utrecht, The Netherlands"),
+                                   'v. 2020.07.14',
                                    br(),
                                    
                                    br(),
-                                  
+                                   
                                    br()
                                    
                                    ),
@@ -265,7 +259,8 @@ fluidPage(theme = shinytheme("journal"),
                           ),
                           tabPanel("LION enrichment table", 
                                    br(),
-                                   tableOutput("ontology.table"),
+                                   #tableOutput("ontology.table"),
+                                   formattableOutput("ontology.table"),
                                    fluidRow(
                                      column(
                                        offset = 0,
