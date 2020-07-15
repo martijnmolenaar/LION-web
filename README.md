@@ -10,7 +10,7 @@ Please [cite](https://academic.oup.com/gigascience/article/8/6/giz061/5505544):
 
 
 
-## installation of R-packages needed for LION/web
+## installation of R-packages required for LION/web
 ```R
 if("devtools" %in% rownames(installed.packages()) == FALSE) {install.packages("devtools",  repos = c(CRAN = "http://cran.rstudio.com"))}
 library(devtools)
