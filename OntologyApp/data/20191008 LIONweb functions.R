@@ -6,6 +6,12 @@ convertLipidNames <- function(name){
     processed_input <- input
     if (processed_input==""){processed_input <- " "}
     
+    # remove MWB prefix *
+    processed_input <- gsub("^\\* ","",processed_input)
+    # remove MWB suffix _n,{n}
+    processed_input <- gsub("_\\d{1}$","",processed_input)
+    processed_input <- gsub("\\{\\d{1}\\}$","",processed_input)
+    
     #aliases 
     {
       processed_input <- gsub("DAG|diacylglycerol","DG",processed_input)
@@ -45,14 +51,24 @@ convertLipidNames <- function(name){
     
     ### end special cases
     if(grepl("\\d+:\\d+;\\d+",processed_input) & !grepl("\\d+:\\d+;\\d+:\\d+",processed_input)){    ### 32:1;1 format >> 32:1
-      processed_input <- gsub(";\\d+","",processed_input)
+      
+      FA <- regmatches(processed_input, regexpr("\\d+:\\d+;\\d+", processed_input)) 
+      
+      if(grepl(";1\\D|;1$",processed_input)){
+        FA_new <- paste("m",gsub(";\\d+","",FA), sep ="")
+      } else if(grepl(";2\\D|;2$",processed_input)){
+        FA_new <- paste("d",gsub(";\\d+","",FA), sep ="")
+      } else if(grepl(";3\\D|;3$",processed_input)){
+        FA_new <- paste("t",gsub(";\\d+","",FA), sep ="")
+      }
+      
+      processed_input <- gsub( paste("\\Q",FA,"\\E",sep = ""),FA_new,processed_input)
     }
     if(grepl("\\d+:\\d+[cΔ]\\d+",processed_input) & !grepl("\\d+:\\d+[cΔ]\\d+:\\d+",processed_input)){    ### 32:1c1 format >> 32:1
       processed_input <- gsub("[cΔ]\\d+","",processed_input)
     }
-    ###############    
-    if(grepl("\\d+:\\d+:\\d+",processed_input)){    ### 32:1;1 format >> 32:1
-      #processed_input <- gsub(";\\d+","",processed_input)
+    
+    if(grepl("\\d+:\\d+:\\d+",processed_input)){    ### 32:1:1 format >> 32:1
       parts <- unlist(strsplit(x = paste("_",processed_input,"_",sep=""), split = "\\d+:\\d+:\\d+"))
       specialFAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+:\\d+", processed_input)))
       specialFAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+", processed_input)))
@@ -100,6 +116,7 @@ convertLipidNames <- function(name){
       
     }
     
+    
     processed_input <- gsub("_\\d*\\.*\\d*/\\d*\\.*\\d*", "",processed_input)   ## remove amu/RT info
     
     processed_input <- gsub(";\\d$","",processed_input)   ### in case of SHexCer 30:2;1
@@ -141,6 +158,10 @@ convertLipidNames <- function(name){
     processed_input <-
       gsub("\\((\\d+[EZ]{1},*)+\\)", "", processed_input)   ## removing (5Z,8Z,11Z,14Z)-like info
     
+    processed_input <- 
+      gsub("<.+>", "",processed_input)   ## remove eg <{9Z,12Z}> in 'TG(16:0/18:2<{9Z,12Z}>/18:0)',
+    #regmatches(processed_input, regexpr("<.+>", processed_input)) 
+    
     if (grepl("\\d+:\\d+[pe]{1}", processed_input)){             ### ether lipids: in case of 18:1p in stead of P-18:1
       
       ether_FAs <- unlist(regmatches(processed_input, gregexpr("\\d+:\\d+[pe]{1}", processed_input)))  ## extract 18:1
@@ -157,15 +178,19 @@ convertLipidNames <- function(name){
       }
     }
     
+    if (grepl("^FFA\\d", processed_input)) {  ## add space between FFA and 16:0 in FFA16:0
+      processed_input <- gsub("^FFA", "FFA ",    processed_input)
+    }
+    
     if (!grepl("\\(", processed_input)) {
       ## if they don't contain /
       ## process PC 18:1/20:4 format to PC(..)
       
       middlePart <-         ### ..O-18:1/16:0
         regmatches(processed_input,
-                   regexpr("[dtAOP-]*(\\d+:\\d+/*)+", processed_input))
+                   regexpr("[mdtAOP-]*(\\d+:\\d+/*)+", processed_input))
       otherParts <-         ## SM
-        unlist(strsplit(processed_input, "[dtAOP-]*(\\d+:\\d+/*)+"))
+        unlist(strsplit(processed_input, "[mdtAOP-]*(\\d+:\\d+/*)+"))
       otherParts <- gsub(" ", "", otherParts)
       text <- ""
       
@@ -289,16 +314,20 @@ convertLipidNames <- function(name){
           text <- paste(text, FAs[i], sep = "")
         }
       }
-      text
-    } else {
-      processed_input
+      processed_input <- text
+    } 
+    
+    if(grepl("\\([dtm]\\d+:\\d+\\)", processed_input)){   ## SM(d32:0) is not supported in LION >> SM(32:0), in contrast to SM(d18:1/16:0), which is supported
+      processed_input <- gsub("[dtm]","",processed_input)
     }
+    
+    return(processed_input)
     
   })
   
   
   
-}       ## 20191106 updated in apps
+}       ## 20200420 updated in apps!!
 
 simplifyLipidnames <- function(name){
   options(stringsAsFactors = FALSE)
