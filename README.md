@@ -38,6 +38,10 @@ if("shinyTree" %in% rownames(installed.packages()) == FALSE) {install.packages("
 if("shinyWidgets" %in% rownames(installed.packages()) == FALSE) {install.packages("shinyWidgets",  repos = c(CRAN = "http://cran.rstudio.com"))}
 if("visNetwork" %in% rownames(installed.packages()) == FALSE) {install.packages("visNetwork",  repos = c(CRAN = "http://cran.rstudio.com"))}
 if("formattable" %in% rownames(installed.packages()) == FALSE) {install.packages("formattable",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("ggrepel" %in% rownames(installed.packages()) == FALSE) {install.packages("ggrepel",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("shinycssloaders" %in% rownames(installed.packages()) == FALSE) {install.packages("shinycssloaders",  repos = c(CRAN = "http://cran.rstudio.com"))}
+if("jsonlite" %in% rownames(installed.packages()) == FALSE) {install.packages("jsonlite",  repos = c(CRAN = "http://cran.rstudio.com"))}
+
 ```
 
 ## Load all necessary libraries to check installation
@@ -58,6 +62,9 @@ library(topOnto)
 library('topOnto.LION.db')
 library(visNetwork)
 library(formattable)
+library(jsonlite)
+library(shinycssloaders)
+library(ggrepel)
 ```
 
 ## run LION/web app
