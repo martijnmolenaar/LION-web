@@ -109,7 +109,7 @@ convertLipidNames <- function(name){
     
     
     if(length(FAs)==2 & grepl("^SM",    processed_input)){                ### voor 'SM 18/16:0)'
-      if(!grepl("[dt]\\d+",processed_input)){                             ### double check: no 'd'18...?
+      if(!grepl("[dtm]\\d+",processed_input)){                             ### double check: no 'd'18...?
         processed_input <- gsub("SM 18","SM d18",processed_input)         ### add 'd'
         processed_input <- gsub("SM\\(18","SM(d18",processed_input)
       }
@@ -275,8 +275,7 @@ convertLipidNames <- function(name){
       UpperLower <- regmatches(processed_input, regexpr("[[:upper:]]{1}[[:lower:]]{2}", processed_input)) 
       processed_input <- gsub("[[:upper:]]{1}[[:lower:]]{2}", tolower(UpperLower),processed_input )
     }
-    
-    
+
     ## reorder FAs
     if (         
       (length(unlist(regmatches(processed_input, gregexpr("\\d+:\\d+",        processed_input)))) > 1) &                         ## when more than 1 FA)
@@ -290,7 +289,6 @@ convertLipidNames <- function(name){
         )
       ), ":")))
       FAs <- as.data.frame(sapply(as.data.frame(FAs), as.numeric))
-      
       ## added to sort lysoPCs
       FAs[apply(FAs,1,function(i){paste(i, collapse = ":")}) == "0:0",1] <- 999  ## set 0:0 to 999:0 to order right
       
@@ -314,6 +312,7 @@ convertLipidNames <- function(name){
           text <- paste(text, FAs[i], sep = "")
         }
       }
+      
       processed_input <- text
     } 
     
@@ -325,9 +324,16 @@ convertLipidNames <- function(name){
     
   })
   
-  
-  
 }       ## 20200420 updated in apps!!
+
+convertLipidNames("(m16:0)")
+convertLipidNames("(d16:0)")
+convertLipidNames("(t16:0)")
+convertLipidNames("SM(m18:1/20:0)")
+convertLipidNames("SM(d18:1/20:0)")
+convertLipidNames("SM(t18:1/20:0)")
+convertLipidNames("GPA(18:0/20:0)")
+
 
 simplifyLipidnames <- function(name){
   options(stringsAsFactors = FALSE)
@@ -336,7 +342,7 @@ simplifyLipidnames <- function(name){
     processed_input <- input
     
     to_simplify <-
-      unlist(regmatches(processed_input,    gregexpr("(iso-)*[dt]*\\d+:\\d+([/_]+\\d+:\\d+)+", processed_input)    ))
+      unlist(regmatches(processed_input,    gregexpr("(iso-)*[dtm]*\\d+:\\d+([/_]+\\d+:\\d+)+", processed_input)    ))
     to_simplify <- to_simplify[!grepl("^0:0|[_/]+0:0",to_simplify)]
     
     if (length(to_simplify) > 0) {
@@ -364,7 +370,7 @@ simplifyLipidnames <- function(name){
 
 getFAs <- function(lipids){
   output <- sapply(lipids, function(lipid_i){
-    FAs <- unlist(regmatches(lipid_i, gregexpr("(iso-)*[dt]*\\d+:\\d+", lipid_i)))
+    FAs <- unlist(regmatches(lipid_i, gregexpr("(iso-)*[dtm]*\\d+:\\d+", lipid_i)))
     FAs[grepl("^\\d+",FAs)] <- paste("C",FAs[grepl("^\\d+",FAs)], sep = "")
     FAs <- gsub("d18:0","d18:0 (dihydrosphingosine)",FAs)
     FAs <- gsub("d18:1","d18:1 (sphingosine)",FAs)
