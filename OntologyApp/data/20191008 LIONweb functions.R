@@ -326,15 +326,6 @@ convertLipidNames <- function(name){
   
 }       ## 20200420 updated in apps!!
 
-convertLipidNames("(m16:0)")
-convertLipidNames("(d16:0)")
-convertLipidNames("(t16:0)")
-convertLipidNames("SM(m18:1/20:0)")
-convertLipidNames("SM(d18:1/20:0)")
-convertLipidNames("SM(t18:1/20:0)")
-convertLipidNames("GPA(18:0/20:0)")
-
-
 simplifyLipidnames <- function(name){
   options(stringsAsFactors = FALSE)
   
