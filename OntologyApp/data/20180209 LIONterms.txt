@@ -212,6 +212,8 @@
 "monoalkylglycerophosphoglycerophosphomonoradylglycerols [GP1209]"	"LION:0000949"
 "1z-alkenylglycerophosphoglycerophosphodiradylglycerols [GP1210]"	"LION:0000950"
 "1z-alkenylglycerophosphoglycerophosphomonoradylglycerols [GP1211]"	"LION:0000951"
+"diacylglycerophospho-N-acylethanolamines"	"LION:0012447"
+"diacylglycerophosphoacylglycerols"	"LION:0012449"
 "contains vinyl ether bond (plasmalogen)"	"LION:0001734"
 "very low transition temperature"	"LION:0001735"
 "low transition temperature"	"LION:0001736"

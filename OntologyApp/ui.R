@@ -62,16 +62,16 @@ fluidPage(theme = shinytheme("journal"),
                                                       ),
                                                       content = "For sum-formatted phospholipids, e.g. PC(34:1), predict the most likely fatty acid assocations, based on reported fatty acid compositions. For example, PC(34:1) will be associated to C16:0 and C18:1. Only use for datasets of mammalian origin"
                                                ), 
-                                               br(),
-                                               popify(placement = "right", title = "Info", options=list(container="body"),
-                                                 materialSwitch(
-                                                   inputId = "EmailMissingLipids",
-                                                   label = "Automatically send unmatched lipids to LION-team",
-                                                   status = 'primary',
-                                                   right = TRUE
-                                                 ),
-                                                 content = "Names of lipids that cannot be matched to LION are automatically send to the LION-team. This will help us to improve the coverage of the database. User information and associated data will NOT be sent."
-                                               ), 
+                                               # br(),
+                                               # popify(placement = "right", title = "Info", options=list(container="body"),
+                                               #   materialSwitch(
+                                               #     inputId = "EmailMissingLipids",
+                                               #     label = "Automatically send unmatched lipids to LION-team",
+                                               #     status = 'primary',
+                                               #     right = TRUE
+                                               #   ),
+                                               #   content = "Names of lipids that cannot be matched to LION are automatically send to the LION-team. This will help us to improve the coverage of the database. User information and associated data will NOT be sent."
+                                               # ), 
                                                br(),
                                                popify(placement = "right", title = "Info", options=list(container="body"),
                                                  materialSwitch(
@@ -136,7 +136,7 @@ fluidPage(theme = shinytheme("journal"),
                                                                              column(offset = 0,#style='margin-left:2%;' , 
                                                                                     width = 12, 
                                                                                     actionButton("submitB","  Submit",
-                                                                                                 icon = icon("lightbulb-o", lib = "font-awesome"))
+                                                                                                 icon = icon("lightbulb", lib = "font-awesome"))
                                                                              ),content = 'After clicking "submit", LION/web matches the input lipids to the LION-database. Only matched identifiers will be used in the enrichment analysis. Subsequently, LION/web ranks the input lipids by the provided numeric value. The distributions of all LION-terms associated with the dataset are compared to uniform distributions and evaluated by Kolmogorov-Smirnov-tests. A low p-value is returned when lipids associated with a certain LION-term are higher on top of the ranked list than one would expect by chance.')), 
                                                                     br(),
                                                                     br(),
@@ -176,7 +176,7 @@ fluidPage(theme = shinytheme("journal"),
                                                  column(offset = 0,#style='margin-left:2%;' , 
                                                         width = 12,
                                                         actionButton("submitA","  Submit",
-                                                                     icon = icon("lightbulb-o", lib = "font-awesome"))
+                                                                     icon = icon("lightbulb", lib = "font-awesome"))
                                                  ), content = 'After clicking "submit", LION/web matches the input lipids to the LION-database. Only matched identifiers will be used in the enrichment analysis. Subsequently, LION/web calculates a score of every LION-term that is associated with the dataset, for both the hitlist as the background set. These scores are compared by Fisher-exact tests. A low p-value is returned when a certain LION-term is higher represented in the hitlist than one would expect by chance.')),
                                                br(),
                                                br(),
@@ -188,21 +188,21 @@ fluidPage(theme = shinytheme("journal"),
                                                br(),
                                                br(),
                                                "* from Molenaar MR, et al., 2019"
-                                               ),
-                                      tabPanel(id = "Contact", title = "", icon = icon("envelope-open-text", lib = "font-awesome"),
-                                               br(),
-                                               br(),
-                                               'Questions, feedback or a request to increase coverage? Contact us:',
-                                               br(),
-                                               br(),
-                                               textAreaInput("from", label = "From:", value="", resize = "none", rows = 1, placeholder = 'your_email@gmail.com'),
-                                               selectizeInput("subject", label = "Subject:", selected = "Question", options = list(create = TRUE),
-                                                           choices = c("Question","Feedback","Request to add lipids to LION","")),
-                                               
-                                               textAreaInput("message", label = "Message:",value = "", resize = "vertical",
-                                                               placeholder ="Write message here. Please include a list of identifiers if you want to request lipids to add."),
-                                               br(),
-                                               actionButton("send", "Send mail")
+                                      #          ),
+                                      # tabPanel(id = "Contact", title = "", icon = icon("envelope-open-text", lib = "font-awesome"),
+                                      #          br(),
+                                      #          br(),
+                                      #          'Questions, feedback or a request to increase coverage? Contact us:',
+                                      #          br(),
+                                      #          br(),
+                                      #          textAreaInput("from", label = "From:", value="", resize = "none", rows = 1, placeholder = 'your_email@gmail.com'),
+                                      #          selectizeInput("subject", label = "Subject:", selected = "Question", options = list(create = TRUE),
+                                      #                      choices = c("Question","Feedback","Request to add lipids to LION","")),
+                                      #          
+                                      #          textAreaInput("message", label = "Message:",value = "", resize = "vertical",
+                                      #                          placeholder ="Write message here. Please include a list of identifiers if you want to request lipids to add."),
+                                      #          br(),
+                                      #          actionButton("send", "Send mail")
                                                
                                                
                                                
@@ -236,8 +236,16 @@ fluidPage(theme = shinytheme("journal"),
                                    br(),
                                    br(),
                                    br(),
+                                   a('Lipidomic profiling of rat hepatic stellate cells during activation reveals a two-stage process accompanied by increased levels of lysosomal lipids.',
+                                     href="https://doi.org/10.1016/j.jbc.2023.103042", target="_blank"),br(),
+                                   tags$b("J Biol Chem. 2023 Feb 18;299(4):103042. doi: 10.1016/j.jbc.2023.103042."),
+                                   br(),
+                                   em("Martijn R Molenaar, Maya W Haaker, A Bas Vaandrager, Martin Houweling, J Bernd Helms."), 
+                                   br(),
+                                   br(),
+                                   br(),
                                    p("Division Cell Biology, Metabolism & Cancer, Department Biomolecular Health Sciences, Universiteit Utrecht, The Netherlands"),
-                                   'v. 2020.07.14',
+                                   'v. 2024.01.28',
                                    br(),
                                    
                                    br(),

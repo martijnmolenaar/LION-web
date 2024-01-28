@@ -12,6 +12,9 @@ LIONterms_rules <- read.csv(file = 'data/20191008 LIONterms_rules.csv', header =
 LIONterms_rules$RULE1[LIONterms_rules$RULE1 == ""] <- "-"
 LIONterms_FAs <- read.csv(file = 'data/20191008 LIONterms_FAs.csv', header = T)
 
+#change_log <- readLines('https://raw.githubusercontent.com/martijnmolenaar/lipidontology.com/master/README.md')
+#change_log <- paste(change_log[-c(1:2)], collapse = "\n", sep = "")
+
 backgroundlist_example <- paste(cluster_example$lipids, "\n", collapse = '', sep = "")
 
 sublist_example1 <- paste(cluster_example$lipids[cluster_example$cluster == 6], "\n", collapse = '', sep = "")
@@ -42,6 +45,8 @@ library(formattable)
 library(jsonlite)
 library(ggrepel)
 library(shinycssloaders)
+
+
 
 
 ## loading lipid ontology data
@@ -141,6 +146,7 @@ function(input, output, session) {
     
     ## error handling
     
+
     errors <- NULL
     if (!(is.data.frame(df))) {
       df <- data.frame(errors = df[1], column = 0)
@@ -163,6 +169,9 @@ function(input, output, session) {
       if (sum( df[-c(1,2),-1] == "" ) > 0) {
         errors <- c(errors, "ERROR: Dataset contains empty cells")
       }
+      if (sum( df[-c(1,2),-1] == 0 ) > 0) {
+        errors <- c(errors, "ERROR: Dataset contains zeros")
+      }
       if (all(table(as.character(df[1, -1])) < 2)) {
         errors <- c(errors, "ERROR: Some or all conditions are n < 2")
       }
@@ -181,7 +190,7 @@ function(input, output, session) {
     
     
     isolate(if(input$file_input == "load external dataset"){
-      studyID <- paste(input$MWfile1,": ",sep = "")
+       studyID <- paste(input$MWfile1,": ",sep = "")
     } else {studyID <- ""})
     
     #if(!(is.null(errors))){
@@ -246,9 +255,11 @@ function(input, output, session) {
       downloadLink("examplePre3", "example set 3 (CHO-k1 incubated with AA) [2]"),
       br(),
       br(),
-      em("[1] Andreyev AY, et al., 2010"),
+      em(tags$small("[1] adapted from Andreyev AY et al, 2010")), br(),
+      em(tags$small("[2] from Molenaar MR et al, 2019")),br(),
+      #em("[1] Andreyev AY, et al., 2010"),
       br(),
-      em("[2] Molenaar MR, et al., 2019"),
+      #em("[2] Molenaar MR, et al., 2019"),
       br(),br(),
       uiOutput("selectLocalStatisticUI")
       ))
@@ -488,14 +499,17 @@ function(input, output, session) {
   
   output$conditionsUI_pB <- renderUI({
     data <- pre_processed_data()[[1]]   ### show when 'pre_processed_data()' is constructed
+    
+
     if(!(any(is.na(data$pValues)))){
-      fluidRow(
-      actionButton(inputId = "submitPreprocessing",
-                   label = "  Use values as local statistics", 
-                   width = NULL,
-                   icon = icon("share-square-o", lib = "font-awesome")),
+     fluidRow(
+        
+       actionButton(inputId = "submitPreprocessing",
+                    label = "  Use values as local statistics", 
+                    width = NULL,
+                    icon = icon("share-square", lib = "font-awesome")),
       downloadButton("download_pValues", "")
-      )
+     )
     }
     
     
@@ -512,6 +526,7 @@ function(input, output, session) {
         })
     }
     
+
     if(any(input$local_statistics %in% c(1,2))){
     setA <- input_data$matrix[,which(input_data$meta[1,] == input$conditionA)]
     setB <- input_data$matrix[,which(input_data$meta[1,] == input$conditionB)]
@@ -583,23 +598,40 @@ function(input, output, session) {
     
     if(ylab == 'F-test p-value (log scale)'){
       if (length(input$selectedConditions) > 1) { 
-      qplot(y=df, main = "Distribution local statistics", 
-            xlab = "metabolites", 
-            ylab = ylab,
-            log = "y"
+        
+        ggplot(data.frame(x = 1:length(df), y=df), aes(x = x, y = y))+
+          labs(x = "metabolites", y = ylab, title = "Distribution local statistics")+
+          geom_point()+
+          scale_y_log10()+
+          geom_blank()
+        
+        # qplot is deprecated!!         
+        # qplot(y=df, main = "Distribution local statistics", 
+        #       xlab = "metabolites", 
+        #       ylab = yla
+        #       log = "y")
             
-      )} else {
+      } else {
         ggplot(data.frame(x = 1:length(df), y=NA), aes(x = x, y = y))+
           labs(x = "metabolites", y = ylab, title = "Distribution local statistics")+
           geom_blank()
       }
       
     } else {
-      qplot(y=df, main = "Distribution local statistics", 
-            xlab = "metabolites", 
-            ylab = ylab
-      )
-    }
+      
+      ggplot(data.frame(x = 1:length(df), y=df), aes(x = x, y = y))+
+        labs(x = "metabolites", y = ylab, title = "Distribution local statistics")+
+        geom_point()+
+        geom_blank()
+      
+      # qplot is deprecated!!   
+      # qplot(y=df, main = "Distribution local statistics", 
+      #       xlab = "metabolites", 
+      #       ylab = ylab
+      # )
+    
+      
+      }
     
    
     
@@ -729,6 +761,7 @@ function(input, output, session) {
     }
   })
   observeEvent(input$submitA, {
+
     input_list <- c(input$sublist, input$background)
     
     if(all(grepl("\n", input_list) & grepl("\\D",input_list))){   ## input requirements
@@ -1043,7 +1076,7 @@ function(input, output, session) {
             name = paste("<font color='",color_pattern,"'>",lipidExistance_i$name,"</font>" , sep ="", collapse = "<br>"),
             #LION = paste("<font color='",color_pattern,"'>",lipidExistance_i$LION,"</font>" , sep ="",  collapse = "<br>")
             LION = paste("<a href='",
-                         'http://bioportal.bioontology.org/ontologies/LION/?p=classes&conceptid=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2F',
+                         'https://bioportal.bioontology.org/ontologies/LION/?p=classes&conceptid=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2F',
                          gsub(":","_",lipidExistance_i$LION),
                          "' style='color: ", color_pattern,
                          "' target='_blank'>",
@@ -1764,10 +1797,10 @@ function(input, output, session) {
           
         }
         
-        if(isolate(input$EmailMissingLipids)){   ## email missing lipids when option is set
-          #sendEmail(subject = "missing annotations",mail_message = paste(subset(lipidExistance,`LION ID`=="not found")$input, collapse = "\n"))
-          sendEmail(subject = "missing annotations", mail_message = paste(apply(lipidExistance, 1, function(row){paste(row, collapse = "\t")}), collapse = "\n"))
-        }
+        # if(isolate(input$EmailMissingLipids)){   ## email missing lipids when option is set
+        #   #sendEmail(subject = "missing annotations",mail_message = paste(subset(lipidExistance,`LION ID`=="not found")$input, collapse = "\n"))
+        #   sendEmail(subject = "missing annotations", mail_message = paste(apply(lipidExistance, 1, function(row){paste(row, collapse = "\t")}), collapse = "\n"))
+        # }
         
         
         
@@ -1947,7 +1980,7 @@ function(input, output, session) {
         rownames(table) <- NULL
         ## add linkds
         table[[1]] <-
-        paste("<a href='http://bioportal.bioontology.org/ontologies/LION/?p=classes&conceptid=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2F",
+        paste("<a href='https://bioportal.bioontology.org/ontologies/LION/?p=classes&conceptid=http%3A%2F%2Fpurl.obolibrary.org%2Fobo%2F",
               gsub(":","_",table[[1]]), "' style='color: #4f4d4d' target='_blank'>",
               table[[1]],"</a>",      sep = "")
         
@@ -2038,31 +2071,18 @@ function(input, output, session) {
       })
       
    
-      ## email
-      observe({
-        if(is.null(input$send) || input$send==0) return(NULL)
-        from <- isolate(input$from)
-        to <- "xxx@xxx.nl"
-        subject <- isolate(input$subject)
-        msg <- isolate(input$message)
-        
-        sendEmail(subject = subject, from = from, mail_message = msg)
-        showModal(modalDialog(
-          footer = modalButton("Ok"),
-          size = "m",
-          easyClose = TRUE,
-          title = paste("Confirmation:",subject), 
-          p("Thank you for contacting us. Your message was sent successfully.")
-          
-        ))
-      })
-      
+ 
       
       
       output$tree <- renderTree({        ### LION-tree
         LIONstructure
       })
       
- 
+   
+      
+      #output$markdown <- renderUI({
+      #  HTML(markdown::markdownToHTML(text = change_log ))
+      #})
+      
       
 }

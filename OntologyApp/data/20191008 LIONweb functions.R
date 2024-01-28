@@ -329,6 +329,7 @@ convertLipidNames <- function(name){
   
 }       ## 20200420 updated in apps!!
 
+
 simplifyLipidnames <- function(name){
   options(stringsAsFactors = FALSE)
   
@@ -418,20 +419,6 @@ predict_FAs <- function(headgroup = NULL, summedFA = NULL, composition_table = N
   
 }
 
-sendEmail <- function(subject = "LION/web usage", mail_message = "empty", from = "system"){
-  url <- "######"
-  api_key <- "######"
-  the_body <-
-    list(
-      from="####",
-      to="aaa@xxx.nl",
-      subject=subject,
-      text=paste(mail_message,"\n\n=====================\nfrom: ",from,"\n=====================\nLION/web: www.lipidontology.com", sep= "")
-    )
-  req <- httr::POST(url, httr::authenticate("api", api_key),  encode = "form",  body = the_body)
-  httr::stop_for_status(req)
-  TRUE
-}   ## mail function
 
 associatedTerms <- function(lipid, ontologyObject, all = FALSE, reformat = FALSE) {    ## function: which LION-terms are associated with a lipid?
   lipidInTerms <- genesInTerm(ontologyObject)
