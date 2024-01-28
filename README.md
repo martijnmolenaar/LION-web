@@ -2,6 +2,7 @@
 
 App available online via [lipidontology.com](http://www.lipidontology.com)
 
+<img src="https://raw.githubusercontent.com/martijnmolenaar/LION-web/master/OntologyApp/www/LIONicon%20enrich.png" alt="LION logo">
 
 Please [cite](https://academic.oup.com/gigascience/article/8/6/giz061/5505544):
 > **LION/web: a web-based ontology enrichment tool for lipidomic data analysis.**
